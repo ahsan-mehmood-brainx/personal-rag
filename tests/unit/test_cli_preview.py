@@ -48,7 +48,9 @@ def test_preview_rejects_bad_chunk_settings(
     assert "overlap" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", [["ingest", "x.md"], ["search", "q"], ["ask", "q"], ["reindex"]])
+@pytest.mark.parametrize(
+    "command", [["ingest", "x.md"], ["search", "q"], ["ask", "q"], ["reindex"]]
+)
 def test_live_commands_report_missing_settings_without_values(
     command: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
