@@ -57,3 +57,22 @@ Decisions:
   `DATA_DIR=$(mktemp -d) uv run python -m personal_rag.cli ingest tests/fixtures/persona/*`
   (persona has ~690 chunk-text tokens, roughly 900 with headers, so cost is negligible).
 Checks: ruff clean, 125 tests pass. (Code-review hook findings fixed: Chroma batch limit, reindex safety, CLI arg checks, filtered lookups.)
+
+## Phase 3: Query pipeline (done, live ask smoke deferred)
+Built: schemas (ScopeDecision, GroundedAnswer, GroundednessVerdict, TokenUsage, Source, DebugInfo,
+AskResponse...), `llm/prompts.py` (spec prompts verbatim + groundedness prompt + message builders),
+`llm/structured.py` (single `responses.parse` helper), `query/scope_guard.py`,
+`query/retriever.py`, `query/generator.py` (+ optional groundedness checker),
+`query/validator.py`, `query/pipeline.py`, `services.py` (composition root shared by CLI/API/evals),
+CLI `ask [--debug]`, fakes for classifier/generator/groundedness, ~45 new tests.
+Decisions:
+- `responses.parse(..., store=False)`: personal documents are not retained by OpenAI.
+- `temperature` and `reasoning={"effort": ...}` sent only when configured.
+- Upstream failure at any step (classifier, embedder, generator, groundedness) -> status `error`.
+  Planned API mapping: `/ask` returns HTTP 502 with the fixed-message AskResponse body in that case.
+- Pipeline raises `InvalidQuestionError` (-> 400) and `IndexMismatchError` (-> 503); everything
+  else is a response status. No-documents check happens before any OpenAI call.
+- Excerpts and answers are defanged against delimiter tags (case/space-insensitive).
+- Query-embedding tokens in debug are a tiktoken estimate (shared embedder counter is not
+  request-safe). Question text is logged only at DEBUG, as the spec allows.
+- NOT DONE (needs API key): `ask` smoke tests against the synthetic persona with a temp DATA_DIR.

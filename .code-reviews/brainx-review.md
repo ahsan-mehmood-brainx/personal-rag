@@ -1,11 +1,11 @@
 ---
-diff_hash: 478d03aa7e1a82f9530562e6480e8c12da4bcf8cd9c5166cea4fc1d499adbd26
-reviewed_at: 2026-11-24T12:55:24Z
+diff_hash: 1d998bc394e52d22b20c0827fa8209a74cbf223fa64642a73df18b84217fc003
+reviewed_at: 2026-11-24T13:20:00Z
 ---
 
 ## Summary
 
-Phase 2: embeddings and storage. Adds the OpenAI client factory (`llm/client.py`), an `Embedder` Protocol with `OpenAIEmbedder` (batches of 100, order preserved), a Chroma-backed `VectorStore` with a model guard, `IngestionService` (ingest with dedupe/replace, delete, reindex), CLI commands `ingest`, `search`, `reindex`, a hash-based `FakeEmbedder`, and 53 new tests (122 pass locally). Stack: no BrainX stack marker matched (Python project), so a generic review was applied (correctness, security, consistency, maintainability). The code is clean and well tested; the replace ordering (embed, write, then delete old) is sound and no secrets or PII are logged. No Critical or High issues. The findings are one confirmed edge-case crash for large documents, one data-safety weakness in reindex, and a few hardening items. Note: the staged diff also deletes the previous `.code-reviews/brainx-review.md`.
+Phase 3 query pipeline (Python, no framework marker matched, generic review): scope classifier, similarity evidence gate, grounded generation, code-side citation validation, optional groundedness check, `services.py` composition root, and a new `ask` CLI command with unit tests and fakes. The fail-closed design is sound and well tested. Four minor findings, none blocking in severity.
 
 ## Findings
 
@@ -13,45 +13,40 @@ Phase 2: embeddings and storage. Adds the OpenAI client factory (`llm/client.py`
 
 ### High (0)
 
-### Medium (2)
-- **src/personal_rag/store/vector_store.py:78** — `add_chunks` sends every chunk of a document to Chroma in one `collection.add` call. Chroma enforces a maximum batch size (5461 on chromadb 1.5.9, verified: adding 5462 items raises `Batch size of 5462 is greater than max batch size of 5461`). The default upload limit is 10 MB and `max_upload_mb` has no upper bound, so a large text file can produce more chunks than that. The embedding step has already been paid for at that point, and the call fails with an unhandled Chroma error instead of an `UploadError` or `UpstreamError`. Split the write into batches of `client.get_max_batch_size()`, or cap the chunk count during validation. *(correctness)*
-  - status: open
+### Medium (0)
+- **src/personal_rag/llm/prompts.py:101** — `_defang` only replaces the exact lowercase strings `<documents>` and `</documents>`. Variants such as `</DOCUMENTS>`, `</documents >` or `</documents\n>` pass through, so an ingested document can still close the data block and place text that looks like instructions. Normalize with a case-insensitive regex (e.g. `</?\s*documents\s*>`). *(security)*
+  - status: fixed
   - dev_reasoning: N/A
-  - ai_reasoning: Confirmed by running Chroma with 5462 items. No batching exists in `add_chunks`.
-- **src/personal_rag/ingestion/service.py:156** — `reindex` calls `self._store.reset()` before it embeds anything. If `uploads/` is missing or empty (wrong `DATA_DIR`, cleaned folder), the loop has no work and the whole index is erased with nothing to rebuild it from. If the embeddings API is down, the index is also left empty until a later `reindex` succeeds. Build the new index first (a temporary collection swapped in on success), or at least skip the reset when there are no originals and report it. *(correctness)*
-  - status: open
-  - dev_reasoning: N/A
-  - ai_reasoning: Design choice is documented in PROGRESS.md, but the reset still precedes all embedding work, so a failed or empty rebuild destroys the only copy of the vectors.
+  - ai_reasoning: Fixed. `_defang` now uses a case-insensitive regex tolerant of whitespace (`<\s*(/?)\s*(documents|answer)\s*>`), so the listed variants are neutralized.
 
-### Low (4)
-- **src/personal_rag/cli.py:119** — `cmd_ingest` calls `path.read_bytes()` before `validate_upload` enforces `max_bytes`, so a very large file is read fully into memory before being rejected. Check `path.stat().st_size` against `settings.max_upload_bytes` first. Local CLI only, so impact is small. *(security)*
-  - status: open
+### Low (0)
+- **src/personal_rag/cli.py:156** — `cmd_ask` only catches `InvalidQuestionError` and `IndexMismatchError`. A failure in `build_services` (client or Chroma setup) or an `UpstreamError` raised by `require_usable`/`is_empty` surfaces as a traceback, unlike the other commands that map errors to a message and exit code 1. *(consistency)*
+  - status: fixed
   - dev_reasoning: N/A
-  - ai_reasoning: Size is validated only after the whole file is in memory.
-- **src/personal_rag/cli.py:147** — `--top-k` is not validated. `0` silently falls back to `TOP_K` (`args.top_k or settings.top_k`), and a negative value reaches `collection.query(n_results=...)` and surfaces as an unhandled Chroma error. Use `is None` and restrict to the same 1..50 range as the `TOP_K` setting. *(correctness)*
-  - status: open
+  - ai_reasoning: Fixed. `cmd_ask` now also catches `UpstreamError`, and `build_services` runs inside the try block.
+- **src/personal_rag/query/pipeline.py:111** — Embedding token usage is computed as a before/after delta of the shared `embedder.tokens_used` counter. If one pipeline instance serves concurrent API requests, deltas will include other requests' tokens and debug usage will be wrong. *(correctness)*
+  - status: fixed
   - dev_reasoning: N/A
-  - ai_reasoning: Argument bounds differ from the `top_k` Field constraints in config.py.
-- **src/personal_rag/store/vector_store.py:162** — `get_document` and `find_by_filename` both call `list_documents`, which loads the metadata of every chunk in the collection, and `ingest` calls both on every upload. Fine at personal scale, but a `where={"doc_id": ...}` or `where={"filename": ...}` query would avoid the full scan. *(maintainability)*
-  - status: open
-  - dev_reasoning: N/A
-  - ai_reasoning: Cost grows linearly with total chunk count per ingest.
-- **src/personal_rag/ingestion/service.py:63** — `ReindexResult` is a hand-written class while every other result type (`IngestResult`, `DocumentInfo`, `RetrievedChunk`) is a Pydantic model in `schemas.py`, and `IngestResult.status` is a bare `str` documented as three values. Use a dataclass or schema model for `ReindexResult` and a `Literal["ingested", "duplicate", "replaced"]` for `status`. *(consistency)*
-  - status: open
-  - dev_reasoning: N/A
-  - ai_reasoning: Deviates from the schema pattern established in schemas.py.
+  - ai_reasoning: Fixed. Embedding usage is now estimated per request with `count_tokens(question)` instead of a shared counter delta.
+- **src/personal_rag/query/pipeline.py:79** — The full question text is logged at DEBUG. Questions are about personal data, and the rest of the module avoids logging content. *(security)*
+  - status: skipped
+  - dev_reasoning: Spec section 7 says question text may be logged at DEBUG level only; it is never logged at INFO.
+  - ai_reasoning: Log the question length instead, or document that DEBUG logs contain personal data.
 
 ## Reviewed files
-- .code-reviews/brainx-review.md (deleted, previous review)
-- PROGRESS.md
+- .code-reviews/brainx-review.md (deleted, review artifact, skipped)
+- pyproject.toml
 - src/personal_rag/cli.py
-- src/personal_rag/ingestion/service.py
-- src/personal_rag/llm/client.py
-- src/personal_rag/llm/embeddings.py
+- src/personal_rag/llm/prompts.py
+- src/personal_rag/llm/structured.py
+- src/personal_rag/query/generator.py
+- src/personal_rag/query/pipeline.py
+- src/personal_rag/query/retriever.py
+- src/personal_rag/query/scope_guard.py
+- src/personal_rag/query/validator.py
 - src/personal_rag/schemas.py
-- src/personal_rag/store/vector_store.py
+- src/personal_rag/services.py
 - tests/fakes.py
-- tests/unit/test_cli_preview.py
-- tests/unit/test_embeddings.py
-- tests/unit/test_ingestion_service.py
-- tests/unit/test_vector_store.py
+- tests/unit/test_llm_calls.py
+- tests/unit/test_pipeline.py
+- tests/unit/test_validator.py (tests skimmed)

@@ -1,4 +1,4 @@
-"""Command-line interface: preview, ingest, search, reindex (and `ask` from Phase 3).
+"""Command-line interface: preview, ingest, search, ask, reindex.
 
 Pipeline position: a thin developer front end over the same services the API uses. Output
 here is printed on purpose (this is a CLI); library modules log instead.
@@ -9,11 +9,12 @@ import sys
 from pathlib import Path
 
 from personal_rag.config import ConfigError, Settings, load_settings
-from personal_rag.ingestion.service import IngestionService, build_chunks
+from personal_rag.ingestion.service import build_chunks
 from personal_rag.ingestion.validation import UploadError
-from personal_rag.llm.client import UpstreamError, make_client
-from personal_rag.llm.embeddings import OpenAIEmbedder
-from personal_rag.store.vector_store import IndexMismatchError, VectorStore
+from personal_rag.llm.client import UpstreamError
+from personal_rag.query.pipeline import InvalidQuestionError
+from personal_rag.services import build_services
+from personal_rag.store.vector_store import IndexMismatchError
 
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 DEFAULT_CHUNK_SIZE = 400
@@ -89,29 +90,13 @@ def _load_settings_or_exit() -> Settings | None:
         return None
 
 
-def _make_embedder(settings: Settings) -> OpenAIEmbedder:
-    return OpenAIEmbedder(make_client(settings), settings.embedding_model)
-
-
-def _make_service(settings: Settings, embedder: OpenAIEmbedder, store: VectorStore):
-    return IngestionService(
-        embedder=embedder,
-        store=store,
-        uploads_dir=settings.uploads_dir,
-        max_bytes=settings.max_upload_bytes,
-        chunk_size=settings.chunk_size_tokens,
-        overlap=settings.chunk_overlap_tokens,
-    )
-
-
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest files into the knowledge base under DATA_DIR. Calls the embeddings API."""
     settings = _load_settings_or_exit()
     if settings is None:
         return 1
-    embedder = _make_embedder(settings)
-    store = VectorStore(settings.chroma_dir, settings.embedding_model)
-    service = _make_service(settings, embedder, store)
+    services = build_services(settings)
+    service, embedder = services.ingestion, services.embedder
     exit_code = 0
     for raw in args.paths:
         path = Path(raw)
@@ -141,13 +126,13 @@ def cmd_search(args: argparse.Namespace) -> int:
     settings = _load_settings_or_exit()
     if settings is None:
         return 1
-    store = VectorStore(settings.chroma_dir, settings.embedding_model)
+    services = build_services(settings)
+    store, embedder = services.store, services.embedder
     try:
         store.require_usable()
         if store.is_empty():
             print("The knowledge base is empty. Ingest documents first.", file=sys.stderr)
             return 1
-        embedder = _make_embedder(settings)
         top_k = args.top_k if args.top_k is not None else settings.top_k
         hits = store.query(embedder.embed_query(args.query), top_k)
     except (IndexMismatchError, UpstreamError) as exc:
@@ -168,16 +153,48 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ask(args: argparse.Namespace) -> int:
+    """Ask one question through the full pipeline. `--debug` prints the internals."""
+    settings = _load_settings_or_exit()
+    if settings is None:
+        return 1
+    try:
+        response = build_services(settings).pipeline.ask(args.question, debug=args.debug)
+    except (InvalidQuestionError, IndexMismatchError, UpstreamError) as exc:
+        print(exc, file=sys.stderr)
+        return 1
+
+    print(f"[{response.status}] {response.answer}")
+    for source in response.sources:
+        page = source.page if source.page is not None else "n/a"
+        print(
+            f"  {source.label}: {source.filename} | {source.section} | page {page} | "
+            f"similarity {source.similarity:.3f}"
+        )
+    if response.debug is not None:
+        debug = response.debug
+        print("\n--- debug ---")
+        print(f"classifier: {debug.classifier_category} ({debug.classifier_reason})")
+        print(f"threshold: {debug.threshold}")
+        for hit in debug.retrieved:
+            verdict = "keep" if hit.kept else "below"
+            print(f"  {hit.similarity:.4f} {verdict:5} {hit.filename} | {hit.section}")
+        print("latency ms:", debug.latency_ms)
+        for name, usage in debug.token_usage.items():
+            print(
+                f"tokens {name}: in={usage.input_tokens} out={usage.output_tokens} "
+                f"(reasoning={usage.reasoning_tokens})"
+            )
+    return 0 if response.status != "error" else 1
+
+
 def cmd_reindex(_: argparse.Namespace) -> int:
     """Rebuild the whole index from stored originals using the configured embedding model."""
     settings = _load_settings_or_exit()
     if settings is None:
         return 1
-    embedder = _make_embedder(settings)
-    store = VectorStore(settings.chroma_dir, settings.embedding_model)
-    service = _make_service(settings, embedder, store)
     try:
-        result = service.reindex()
+        result = build_services(settings).ingestion.reindex()
     except UpstreamError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -220,6 +237,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--top-k", type=_top_k, default=None, help="Override TOP_K (1 to 50)."
     )
     search.set_defaults(func=cmd_search)
+
+    ask = commands.add_parser("ask", help="Ask a question through the full pipeline (OpenAI).")
+    ask.add_argument("question")
+    ask.add_argument("--debug", action="store_true", help="Show classifier, scores and latency.")
+    ask.set_defaults(func=cmd_ask)
 
     reindex = commands.add_parser("reindex", help="Re-embed all stored originals.")
     reindex.set_defaults(func=cmd_reindex)
