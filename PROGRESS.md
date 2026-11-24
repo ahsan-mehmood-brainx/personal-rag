@@ -76,3 +76,27 @@ Decisions:
 - Query-embedding tokens in debug are a tiktoken estimate (shared embedder counter is not
   request-safe). Question text is logged only at DEBUG, as the spec allows.
 - NOT DONE (needs API key): `ask` smoke tests against the synthetic persona with a temp DATA_DIR.
+
+## Phase 4: API (done)
+Built: `api/main.py` (`create_app(context_factory)`, module-level `app` for uvicorn, lifespan loads
+settings + services at startup so bad config fails fast with a value-free message),
+`tests/integration/test_api.py` (36 tests: health, upload for all four formats, duplicate,
+replace, list, delete, ask for each status, every error code 400/404/413/415/422/502/503, no
+stack-trace leakage, filename sanitizing).
+Decisions:
+- Endpoints per spec section 10. Error bodies are `{"detail": ...}`; request-validation errors are
+  mapped to a generic 400 (FastAPI's default 422 echoes input).
+- `/ask` with an upstream failure returns HTTP 502 whose body is the fixed-message AskResponse
+  (status `error`), so the UI can show it directly.
+- Oversized uploads are rejected from the declared Content-Length before the body is buffered
+  (middleware), with a bounded read in the endpoint as backstop for chunked/understated bodies.
+  Writes (ingest/delete) are serialized with a lock held across embedding: acceptable for one local
+  user; reads can briefly see old and new versions of a replaced file together.
+- Missing `file` field -> 400; unknown or malformed doc_id on DELETE -> 404.
+Dependency audit (`uv export` + `uvx pip-audit`, runtime deps, 2026-11-24):
+- 5 advisories, all on chromadb 1.5.9: CVE-2026-45829, -45830, -45831, -45833 (aliases
+  PYSEC-2026-311/3813/3814/3815). All describe the Chroma SERVER (REST endpoints, tenants, RBAC,
+  trust_remote_code). This app uses the embedded `PersistentClient` and starts no Chroma server, so
+  it is not exposed. No fixed version is published and the lock already has the latest chromadb,
+  so no bump is possible. Revisit when a fix ships. No other vulnerable packages.
+Checks: ruff clean, 202 tests pass.
