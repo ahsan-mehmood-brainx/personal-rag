@@ -1,0 +1,28 @@
+# Secrets: .env holds OPENAI_API_KEY. Only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# Personal documents and the vector index. Never commit.
+data/
+
+# Personal eval data and generated reports
+evals/personal_dataset.yaml
+evals/reports/
+
+# Python and tooling
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
