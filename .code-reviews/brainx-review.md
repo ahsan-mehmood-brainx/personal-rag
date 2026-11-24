@@ -1,11 +1,11 @@
 ---
-diff_hash: f225f5a83dc5ebb0fd0ae6b8caa28f878d12eac1c35e5290dd0c13c657dbd39b
-reviewed_at: 2026-11-24T12:44:42Z
+diff_hash: 69044778e62fe093aabaebec4f66007556f3e47b127befc3d443f263b1e0c075
+reviewed_at: 2026-11-24T12:00:00Z
 ---
 
 ## Summary
 
-Initial scaffold of the personal-rag project (Python 3.12, uv, pydantic-settings): settings loader with value-free error reporting, fixed refusal/meta messages, `.env.example`, `.gitignore`, spec/progress docs, and unit tests. No stack marker matched (Python, no NestJS/React/Express/Rails/PHP/Flutter/iOS/Android), so a generic review was applied. No secrets or PII found in the diff; `.env` is ignored and only `.env.example` is staged.
+Phase 1 ingestion without OpenAI: upload validation, PDF/DOCX/TXT/MD loaders, text cleaning, section-aware chunking, a `build_chunks` service, a `preview` CLI command, persona fixtures and 69 new unit tests. Stack: no BrainX stack marker matched (Python project), so a generic review was applied (correctness, security, consistency, maintainability). Overall the code is clean and well-tested. No Critical or High issues; the findings are edge-case correctness and hardening items. Note: the staged diff also deletes the previous `.code-reviews/brainx-review.md`.
 
 ## Findings
 
@@ -13,42 +13,52 @@ Initial scaffold of the personal-rag project (Python 3.12, uv, pydantic-settings
 
 ### High (0)
 
-### Medium (2)
-- **src/personal_rag/config.py:62** — `classifier_reasoning_effort` and `generation_reasoning_effort` default to `"low"`, and `env_ignore_empty=True` turns a blank variable into that default. The `None` value ("do not send reasoning") therefore cannot be reached from the environment, even though the comments and PROGRESS.md say it is sent "only when not None". `.env.example` also ships `gpt-4o-mini` with `*_REASONING_EFFORT=low`; the file's own comment says these apply to reasoning models only. Once the LLM layer sends `reasoning={"effort": ...}`, non-reasoning models will likely be rejected by the API, with no config-only way to opt out. *(correctness)*
-  - status: open
+### Medium (1 open, 2 fixed)
+- **src/personal_rag/ingestion/chunking.py:131** — `_merge_headings` uses `second.startswith(first)` to detect "first is the parent path of second". This is a plain string prefix test, so sibling headings such as "Skills" and "Skills Summary" (or "Experience" and "Experience Notes") match, and the first heading is silently dropped from the merged section name. It should compare on the path separator, for example `second.startswith(first + HEADING_SEPARATOR)`. *(correctness)*
+  - status: fixed
   - dev_reasoning: N/A
-  - ai_reasoning: Make the default `None` (and keep "low" in `.env.example` only if a reasoning model is the default), or add an explicit sentinel such as `off`/`none` that maps to omitted. `test_reasoning_effort_defaults_to_low_and_is_overridable` currently locks in the blank-falls-back-to-"low" behavior and would need updating. The spec only requires omit-when-unset for temperature, so this also diverges from the established pattern.
-
-- **src/personal_rag/config.py:10** — `DEFAULT_ENV_FILE = Path(".env")` is resolved against the current working directory. Running the API or Streamlit UI from another directory silently skips the `.env` and reports "missing required setting(s)", and `DATA_DIR=./data` has the same CWD dependence (the index could be created in an unexpected location). *(maintainability)*
+  - ai_reasoning: Fixed. `_merge_headings` now tests `second.startswith(first + HEADING_SEPARATOR)`, so sibling headings like "Skills" and "Skills Summary" are no longer collapsed.
+- **src/personal_rag/ingestion/validation.py:82-90** — The DOCX zip-bomb guard checks only the declared size of `word/document.xml`, against a 50 MB limit. Other archive members (styles, embedded media, other XML parts) are unbounded, and the limit is generous for a 10 MB upload. PDFs have no page-count or work cap before PyMuPDF parses them. *(security)*
+  - status: fixed
+  - dev_reasoning: N/A
+  - ai_reasoning: Fixed for the main concern. The check now sums `file_size` over all archive members and PDFs are capped by `MAX_PDF_PAGES`. Residual: the total cap is 100 MB with no compression-ratio check, acceptable for a 10 MB upload limit.
+- **src/personal_rag/ingestion/loaders.py:98** — Scanned-PDF detection averages characters across all pages. A PDF with a few text pages and many scanned pages passes the check, and the image-only pages are dropped without any signal (`return [p for p in pages if p.text.strip()]`). Conversely, a genuine short one-page PDF under 100 characters is rejected as scanned. *(correctness)*
   - status: skipped
-  - dev_reasoning: Single-user local tool launched from the repo root; README documents this. Anchoring DATA_DIR to the package location would break the temp-dir override the eval harness relies on.
-  - ai_reasoning: Anchor to the project root (for example `Path(__file__).resolve().parents[2] / ".env"`) or document that the app must be launched from the repo root. The data dir should be resolved the same way, since it holds personal documents and the vector index.
+  - dev_reasoning: The average-per-page rule is mandated by spec section 6.2; skipped pages are logged as a warning. Surfacing skipped pages to API callers is out of spec for v1.
+  - ai_reasoning: Partly addressed: pages with no text now log a warning. Still open: the caller and user are not told that pages were skipped, and the average-based check can still reject a genuine short single-page PDF. Return skipped-page info to the caller or reject mixed PDFs.
 
-### Low (1)
-- **src/personal_rag/config.py:73** — `api_base_url` is a plain `str` with no validation, while every other field is constrained. A typo such as a missing scheme will only fail at the first request. *(consistency)*
-  - status: open
+### Low (3 fixed, 1 skipped)
+- **src/personal_rag/cli.py:48-50** — CLI overrides are not validated. `--chunk-size 0` is silently ignored because of `args.chunk_size or size`, and negative values or an overlap greater than or equal to the chunk size flow into the chunker (a negative size makes `range()` in `_hard_split` raise a raw traceback). *(correctness)*
+  - status: fixed
   - dev_reasoning: N/A
-  - ai_reasoning: Use `pydantic.AnyHttpUrl` or a validator checking for an http(s) scheme.
+  - ai_reasoning: Fixed. Overrides use `is not None` and non-positive sizes or overlap >= size return an error with exit code 2.
+- **src/personal_rag/cli.py:28** — `_chunking_params` swallows `ConfigError` and falls back to defaults without telling the user. A broken `.env` therefore makes `preview` show chunks that differ from what real ingestion will produce. The module docstring also lists `ingest, search, ask, reindex` commands that do not exist yet. *(maintainability)*
+  - status: fixed
+  - dev_reasoning: N/A
+  - ai_reasoning: Fixed. A stderr note is printed when falling back to defaults and the module docstring now describes only `preview`.
+- **src/personal_rag/ingestion/loaders.py:84** — Both `except Exception: raise DocumentParseError(...) from None` blocks (PDF at line 84, DOCX at line 134) discard the original exception with no logging, which will make parse failures hard to debug. *(maintainability)*
+  - status: fixed
+  - dev_reasoning: N/A
+  - ai_reasoning: Fixed. Both parse failures now log the exception type at warning level before raising the user-facing error.
+- **src/personal_rag/ingestion/cleaning.py:17** — The hyphen-join regex turns intentional hyphens at a line wrap into joined words (for example "front-\nend" becomes "frontend", "state-\nof-the-art" becomes "stateof-the-art"), and it also runs on Markdown and TXT where wraps are deliberate. The bullet regex treats a leading en or em dash and "·" as a list marker, and `clean_text` collapses indentation inside Markdown code fences. *(correctness)*
+  - status: skipped
+  - dev_reasoning: Hyphen joining is spec-mandated (6.3) and already limited to a lowercase continuation; bullet and fence handling are accepted heuristics for CV-style documents.
+  - ai_reasoning: These are known heuristic trade-offs and low impact for CV-style documents. Consider applying hyphen joining to PDF text only, and skipping fenced code in Markdown.
 
 ## Reviewed files
-- .env.example
-- .gitignore
-- .python-version
-- PERSONAL_RAG_SPEC.md
+- .code-reviews/brainx-review.md (deleted, previous review artifact)
 - PROGRESS.md
-- README.md
 - pyproject.toml
-- src/personal_rag/__init__.py
-- src/personal_rag/api/__init__.py
-- src/personal_rag/config.py
-- src/personal_rag/ingestion/__init__.py
-- src/personal_rag/llm/__init__.py
-- src/personal_rag/messages.py
-- src/personal_rag/query/__init__.py
-- src/personal_rag/store/__init__.py
-- tests/__init__.py
-- tests/integration/__init__.py
-- tests/unit/__init__.py
-- tests/unit/test_config.py
-- tests/unit/test_messages.py
-- uv.lock (skimmed: dependency lockfile only; pinned versions in pyproject.toml could not be independently verified against the package index in this run)
+- src/personal_rag/cli.py
+- src/personal_rag/schemas.py
+- src/personal_rag/ingestion/chunking.py
+- src/personal_rag/ingestion/cleaning.py
+- src/personal_rag/ingestion/loaders.py
+- src/personal_rag/ingestion/service.py
+- src/personal_rag/ingestion/validation.py
+- tests/conftest.py (skimmed)
+- tests/fixtures/__init__.py (skimmed)
+- tests/fixtures/make_fixtures.py (skimmed)
+- tests/fixtures/persona/cv.md, projects.txt (fixture data, skimmed)
+- tests/fixtures/persona/certifications.docx, cv_onepage.pdf (binary, skipped)
+- tests/unit/test_chunking.py, test_cleaning.py, test_cli_preview.py, test_loaders.py, test_validation.py (skimmed)

@@ -51,6 +51,10 @@ select = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = [
+    # pymupdf's SWIG bindings emit these on import; they are not ours to fix.
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]
 
 [dependency-groups]
 dev = [

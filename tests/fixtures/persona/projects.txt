@@ -1,0 +1,33 @@
+PROJECT PORTFOLIO OF JORDAN AVERY
+
+Four projects from work and from personal time, newest first.
+
+ORDER TRACKER SERVICE
+
+Work project at Helios Cloud, 2023 to 2024. A service that tracks the state of deployment
+requests from submission to completion and exposes the history to product teams.
+Tech stack: Go, Kafka, PostgreSQL, Kubernetes, deployed on AWS EKS.
+Result: handled about 12,000 deployment events per day with a median latency of 40 milliseconds.
+Jordan designed the event schema and wrote most of the consumer code.
+
+LOGSLICE CLI
+
+Open source command line tool, started in 2021 and still maintained. It filters and summarizes
+large JSON log files from the terminal.
+Tech stack: Go, Cobra.
+Result: about 300 GitHub stars. Jordan is the sole maintainer.
+
+PENNYWISE BUDGET APP
+
+Personal side project from 2020. A small web app for tracking household spending, built as a
+way to learn TypeScript and React properly.
+Tech stack: TypeScript, React, FastAPI, SQLite, Docker.
+Result: used daily by Jordan and three friends; never deployed publicly.
+
+DEMAND FORECASTING PIPELINE
+
+Work project at Northwind Analytics, 2019 to 2022. A nightly pipeline that forecasts product
+demand for retail customers and writes the results to a reporting database.
+Tech stack: Python, Apache Airflow, PostgreSQL, AWS S3, AWS Lambda.
+Result: forecasts for about 40,000 products, and a 38 percent lower monthly compute bill after
+the move to spot instances.
