@@ -1,11 +1,11 @@
 ---
-diff_hash: 69044778e62fe093aabaebec4f66007556f3e47b127befc3d443f263b1e0c075
-reviewed_at: 2026-11-24T12:00:00Z
+diff_hash: 478d03aa7e1a82f9530562e6480e8c12da4bcf8cd9c5166cea4fc1d499adbd26
+reviewed_at: 2026-11-24T12:55:24Z
 ---
 
 ## Summary
 
-Phase 1 ingestion without OpenAI: upload validation, PDF/DOCX/TXT/MD loaders, text cleaning, section-aware chunking, a `build_chunks` service, a `preview` CLI command, persona fixtures and 69 new unit tests. Stack: no BrainX stack marker matched (Python project), so a generic review was applied (correctness, security, consistency, maintainability). Overall the code is clean and well-tested. No Critical or High issues; the findings are edge-case correctness and hardening items. Note: the staged diff also deletes the previous `.code-reviews/brainx-review.md`.
+Phase 2: embeddings and storage. Adds the OpenAI client factory (`llm/client.py`), an `Embedder` Protocol with `OpenAIEmbedder` (batches of 100, order preserved), a Chroma-backed `VectorStore` with a model guard, `IngestionService` (ingest with dedupe/replace, delete, reindex), CLI commands `ingest`, `search`, `reindex`, a hash-based `FakeEmbedder`, and 53 new tests (122 pass locally). Stack: no BrainX stack marker matched (Python project), so a generic review was applied (correctness, security, consistency, maintainability). The code is clean and well tested; the replace ordering (embed, write, then delete old) is sound and no secrets or PII are logged. No Critical or High issues. The findings are one confirmed edge-case crash for large documents, one data-safety weakness in reindex, and a few hardening items. Note: the staged diff also deletes the previous `.code-reviews/brainx-review.md`.
 
 ## Findings
 
@@ -13,52 +13,45 @@ Phase 1 ingestion without OpenAI: upload validation, PDF/DOCX/TXT/MD loaders, te
 
 ### High (0)
 
-### Medium (1 open, 2 fixed)
-- **src/personal_rag/ingestion/chunking.py:131** — `_merge_headings` uses `second.startswith(first)` to detect "first is the parent path of second". This is a plain string prefix test, so sibling headings such as "Skills" and "Skills Summary" (or "Experience" and "Experience Notes") match, and the first heading is silently dropped from the merged section name. It should compare on the path separator, for example `second.startswith(first + HEADING_SEPARATOR)`. *(correctness)*
-  - status: fixed
+### Medium (2)
+- **src/personal_rag/store/vector_store.py:78** — `add_chunks` sends every chunk of a document to Chroma in one `collection.add` call. Chroma enforces a maximum batch size (5461 on chromadb 1.5.9, verified: adding 5462 items raises `Batch size of 5462 is greater than max batch size of 5461`). The default upload limit is 10 MB and `max_upload_mb` has no upper bound, so a large text file can produce more chunks than that. The embedding step has already been paid for at that point, and the call fails with an unhandled Chroma error instead of an `UploadError` or `UpstreamError`. Split the write into batches of `client.get_max_batch_size()`, or cap the chunk count during validation. *(correctness)*
+  - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Fixed. `_merge_headings` now tests `second.startswith(first + HEADING_SEPARATOR)`, so sibling headings like "Skills" and "Skills Summary" are no longer collapsed.
-- **src/personal_rag/ingestion/validation.py:82-90** — The DOCX zip-bomb guard checks only the declared size of `word/document.xml`, against a 50 MB limit. Other archive members (styles, embedded media, other XML parts) are unbounded, and the limit is generous for a 10 MB upload. PDFs have no page-count or work cap before PyMuPDF parses them. *(security)*
-  - status: fixed
+  - ai_reasoning: Confirmed by running Chroma with 5462 items. No batching exists in `add_chunks`.
+- **src/personal_rag/ingestion/service.py:156** — `reindex` calls `self._store.reset()` before it embeds anything. If `uploads/` is missing or empty (wrong `DATA_DIR`, cleaned folder), the loop has no work and the whole index is erased with nothing to rebuild it from. If the embeddings API is down, the index is also left empty until a later `reindex` succeeds. Build the new index first (a temporary collection swapped in on success), or at least skip the reset when there are no originals and report it. *(correctness)*
+  - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Fixed for the main concern. The check now sums `file_size` over all archive members and PDFs are capped by `MAX_PDF_PAGES`. Residual: the total cap is 100 MB with no compression-ratio check, acceptable for a 10 MB upload limit.
-- **src/personal_rag/ingestion/loaders.py:98** — Scanned-PDF detection averages characters across all pages. A PDF with a few text pages and many scanned pages passes the check, and the image-only pages are dropped without any signal (`return [p for p in pages if p.text.strip()]`). Conversely, a genuine short one-page PDF under 100 characters is rejected as scanned. *(correctness)*
-  - status: skipped
-  - dev_reasoning: The average-per-page rule is mandated by spec section 6.2; skipped pages are logged as a warning. Surfacing skipped pages to API callers is out of spec for v1.
-  - ai_reasoning: Partly addressed: pages with no text now log a warning. Still open: the caller and user are not told that pages were skipped, and the average-based check can still reject a genuine short single-page PDF. Return skipped-page info to the caller or reject mixed PDFs.
+  - ai_reasoning: Design choice is documented in PROGRESS.md, but the reset still precedes all embedding work, so a failed or empty rebuild destroys the only copy of the vectors.
 
-### Low (3 fixed, 1 skipped)
-- **src/personal_rag/cli.py:48-50** — CLI overrides are not validated. `--chunk-size 0` is silently ignored because of `args.chunk_size or size`, and negative values or an overlap greater than or equal to the chunk size flow into the chunker (a negative size makes `range()` in `_hard_split` raise a raw traceback). *(correctness)*
-  - status: fixed
+### Low (4)
+- **src/personal_rag/cli.py:119** — `cmd_ingest` calls `path.read_bytes()` before `validate_upload` enforces `max_bytes`, so a very large file is read fully into memory before being rejected. Check `path.stat().st_size` against `settings.max_upload_bytes` first. Local CLI only, so impact is small. *(security)*
+  - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Fixed. Overrides use `is not None` and non-positive sizes or overlap >= size return an error with exit code 2.
-- **src/personal_rag/cli.py:28** — `_chunking_params` swallows `ConfigError` and falls back to defaults without telling the user. A broken `.env` therefore makes `preview` show chunks that differ from what real ingestion will produce. The module docstring also lists `ingest, search, ask, reindex` commands that do not exist yet. *(maintainability)*
-  - status: fixed
+  - ai_reasoning: Size is validated only after the whole file is in memory.
+- **src/personal_rag/cli.py:147** — `--top-k` is not validated. `0` silently falls back to `TOP_K` (`args.top_k or settings.top_k`), and a negative value reaches `collection.query(n_results=...)` and surfaces as an unhandled Chroma error. Use `is None` and restrict to the same 1..50 range as the `TOP_K` setting. *(correctness)*
+  - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Fixed. A stderr note is printed when falling back to defaults and the module docstring now describes only `preview`.
-- **src/personal_rag/ingestion/loaders.py:84** — Both `except Exception: raise DocumentParseError(...) from None` blocks (PDF at line 84, DOCX at line 134) discard the original exception with no logging, which will make parse failures hard to debug. *(maintainability)*
-  - status: fixed
+  - ai_reasoning: Argument bounds differ from the `top_k` Field constraints in config.py.
+- **src/personal_rag/store/vector_store.py:162** — `get_document` and `find_by_filename` both call `list_documents`, which loads the metadata of every chunk in the collection, and `ingest` calls both on every upload. Fine at personal scale, but a `where={"doc_id": ...}` or `where={"filename": ...}` query would avoid the full scan. *(maintainability)*
+  - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Fixed. Both parse failures now log the exception type at warning level before raising the user-facing error.
-- **src/personal_rag/ingestion/cleaning.py:17** — The hyphen-join regex turns intentional hyphens at a line wrap into joined words (for example "front-\nend" becomes "frontend", "state-\nof-the-art" becomes "stateof-the-art"), and it also runs on Markdown and TXT where wraps are deliberate. The bullet regex treats a leading en or em dash and "·" as a list marker, and `clean_text` collapses indentation inside Markdown code fences. *(correctness)*
-  - status: skipped
-  - dev_reasoning: Hyphen joining is spec-mandated (6.3) and already limited to a lowercase continuation; bullet and fence handling are accepted heuristics for CV-style documents.
-  - ai_reasoning: These are known heuristic trade-offs and low impact for CV-style documents. Consider applying hyphen joining to PDF text only, and skipping fenced code in Markdown.
+  - ai_reasoning: Cost grows linearly with total chunk count per ingest.
+- **src/personal_rag/ingestion/service.py:63** — `ReindexResult` is a hand-written class while every other result type (`IngestResult`, `DocumentInfo`, `RetrievedChunk`) is a Pydantic model in `schemas.py`, and `IngestResult.status` is a bare `str` documented as three values. Use a dataclass or schema model for `ReindexResult` and a `Literal["ingested", "duplicate", "replaced"]` for `status`. *(consistency)*
+  - status: open
+  - dev_reasoning: N/A
+  - ai_reasoning: Deviates from the schema pattern established in schemas.py.
 
 ## Reviewed files
-- .code-reviews/brainx-review.md (deleted, previous review artifact)
+- .code-reviews/brainx-review.md (deleted, previous review)
 - PROGRESS.md
-- pyproject.toml
 - src/personal_rag/cli.py
-- src/personal_rag/schemas.py
-- src/personal_rag/ingestion/chunking.py
-- src/personal_rag/ingestion/cleaning.py
-- src/personal_rag/ingestion/loaders.py
 - src/personal_rag/ingestion/service.py
-- src/personal_rag/ingestion/validation.py
-- tests/conftest.py (skimmed)
-- tests/fixtures/__init__.py (skimmed)
-- tests/fixtures/make_fixtures.py (skimmed)
-- tests/fixtures/persona/cv.md, projects.txt (fixture data, skimmed)
-- tests/fixtures/persona/certifications.docx, cv_onepage.pdf (binary, skipped)
-- tests/unit/test_chunking.py, test_cleaning.py, test_cli_preview.py, test_loaders.py, test_validation.py (skimmed)
+- src/personal_rag/llm/client.py
+- src/personal_rag/llm/embeddings.py
+- src/personal_rag/schemas.py
+- src/personal_rag/store/vector_store.py
+- tests/fakes.py
+- tests/unit/test_cli_preview.py
+- tests/unit/test_embeddings.py
+- tests/unit/test_ingestion_service.py
+- tests/unit/test_vector_store.py

@@ -5,6 +5,8 @@ Pipeline position: these are the data shapes that flow between stages. Ingestion
 `AskResponse`. Keeping them in one module makes the whole data flow readable in one place.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -31,3 +33,31 @@ class Chunk(BaseModel):
     embedding_model: str
     text: str = Field(description="Raw chunk text, shown to the user and sent to the generator.")
     embed_text: str = Field(description="Header plus text. This is what gets embedded.")
+
+
+class RetrievedChunk(BaseModel):
+    """A chunk returned by a vector search, with its cosine similarity to the query."""
+
+    chunk_id: str
+    filename: str
+    section: str
+    page: int | None
+    text: str
+    similarity: float  # 1 - cosine distance; higher is closer
+
+
+class DocumentInfo(BaseModel):
+    """One indexed document, derived from chunk metadata (there is no separate database)."""
+
+    doc_id: str
+    filename: str
+    chunk_count: int
+    ingested_at: str
+
+
+class IngestResult(BaseModel):
+    doc_id: str
+    filename: str
+    status: Literal["ingested", "duplicate", "replaced"]
+    chunk_count: int
+    embedded_tokens: int = 0  # estimate (tiktoken) of tokens sent for embedding; 0 if skipped

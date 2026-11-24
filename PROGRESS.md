@@ -36,3 +36,24 @@ Decisions:
   that cache (first run needs network).
 - `preview` uses `.env` chunk settings when complete, else spec defaults (works without API key).
 Checks: ruff clean, 85 tests pass. Preview run on all four persona files.
+
+## Phase 2: Embeddings and storage (done, live smoke deferred)
+Built: `llm/client.py` (client factory, 30 s timeout, 3 retries, `UpstreamError`),
+`llm/embeddings.py` (`Embedder` Protocol, `OpenAIEmbedder`, batches of 100, order preserved,
+token usage tracked), `store/vector_store.py` (Chroma `PersistentClient`, collection
+`personal_kb`, cosine, model guard), `ingestion/service.py` (`IngestionService`: ingest with
+dedupe/replace, delete, reindex), CLI `ingest`, `search`, `reindex`, `tests/fakes.py`
+(hash-based `FakeEmbedder`).
+Decisions:
+- Chroma needs `embedding_function=None` (default would download a local ONNX model) and
+  `configuration={"hnsw": {"space": "cosine"}}` for cosine (verified on chromadb 1.5.9).
+- Replace order: embed new, write new, then delete old, so a failed embedding loses nothing.
+- An empty index silently adopts a new embedding model; a non-empty one is blocked until `reindex`.
+- `reindex` parses and embeds every original in `uploads/` (names are `{doc_id}_{name}`) BEFORE resetting the collection, so an API failure or empty uploads folder never wipes the index.
+- Embedded-token figure printed by CLI is a tiktoken estimate of embed_text; the API-reported
+  total is printed too.
+- NOT DONE (needs API key): live `ingest`/`search` against the synthetic persona. When the key
+  exists, run with a temp DATA_DIR, never ./data:
+  `DATA_DIR=$(mktemp -d) uv run python -m personal_rag.cli ingest tests/fixtures/persona/*`
+  (persona has ~690 chunk-text tokens, roughly 900 with headers, so cost is negligible).
+Checks: ruff clean, 125 tests pass. (Code-review hook findings fixed: Chroma batch limit, reindex safety, CLI arg checks, filtered lookups.)

@@ -46,3 +46,13 @@ def test_preview_rejects_bad_chunk_settings(
 ) -> None:
     assert main(["preview", str(persona_dir / "cv.md"), *flags]) == 2
     assert "overlap" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", [["ingest", "x.md"], ["search", "q"], ["reindex"]])
+def test_live_commands_report_missing_settings_without_values(
+    command: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("OPENAI_API_KEY", "OWNER_NAME", "CLASSIFIER_MODEL", "GENERATION_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    assert main(command) == 1
+    assert "OPENAI_API_KEY" in capsys.readouterr().err
