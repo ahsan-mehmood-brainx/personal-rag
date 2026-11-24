@@ -1,11 +1,11 @@
 ---
-diff_hash: 8a51892e1a7a26218c24318976d6a073bedbd34548ced1a8b7096654d805be07
-reviewed_at: 2026-11-24T13:03:49Z
+diff_hash: 3c6577478ecaed461c777cdd8b9cd552a49392a2d0a730785069436dc60ab7e3
+reviewed_at: 2026-11-24T13:09:16Z
 ---
 
 ## Summary
 
-Phase 4 adds the FastAPI app (`api/main.py`: health, upload, list, delete, ask, error mapping, write lock), 36 integration tests, and PROGRESS.md notes. No stack marker matched (Python project, no package.json/Gemfile/etc.), so a generic review was done (correctness, security, consistency, maintainability). The design is clean: value-free error bodies, generic 400 for validation errors, doc_id validated before any glob, filename sanitizing tested. Two items are worth a look.
+Phase 5 adds a Streamlit UI (`ui/app.py`), an httpx-based `ApiClient` in the package, a shared test `Harness` extracted from the API tests, and AppTest-based UI tests. Stack: no marker matched (Python/FastAPI/Streamlit), so a generic review was applied. No secrets, injection or auth issues found; the UI holds no API key. Findings concern lost user feedback and unhandled malformed responses.
 
 ## Findings
 
@@ -13,23 +13,27 @@ Phase 4 adds the FastAPI app (`api/main.py`: health, upload, list, delete, ask, 
 
 ### High (0)
 
-### Medium (2)
-- **src/personal_rag/api/main.py:166** — The upload size cap is applied only after Starlette has parsed the whole multipart body. `file.file.read(max_upload_bytes + 1)` limits what is passed to ingestion, but the full request is already spooled to memory/disk by then. An oversized upload is still fully buffered before the 413. PROGRESS.md describes this as "capped before parsing", which overstates the protection. *(security)*
+### Medium (1)
+- **ui/app.py:76** — Upload results and delete errors are rendered with `st.sidebar.success/error` and then `st.rerun()` is called immediately (also line 93), which discards the script run's elements. The user never sees per-file upload status (including failures such as unsupported type, too large, or scanned PDF) or a failed delete message. *(correctness)*
   - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Check Content-Length against max_upload_bytes (plus multipart overhead) before reading, or add a small ASGI middleware that rejects oversized bodies. Reword the PROGRESS.md note either way. Exposure is limited if the server binds only to 127.0.0.1 as documented, which is why this is Medium and not High.
-- **src/personal_rag/api/main.py:164-171** — The write lock is held during the whole ingest, including the OpenAI embedding call (network I/O, retries). Every concurrent upload or delete waits behind it, and /ask and /health do not take the lock, so reads can run against a half-updated index during replace (delete old, add new). *(correctness)*
-  - status: skipped
-  - dev_reasoning: Single-user local tool; serialized writes held across embedding are an accepted trade-off, and replace adds the new version before deleting the old so reads never see an empty document.
-  - ai_reasoning: Either document that reads are intentionally unlocked and the replace window is accepted, or use a reader/writer pattern. Consider embedding outside the lock and locking only the store mutation.
+  - ai_reasoning: Store the messages in `st.session_state` before `st.rerun()` and render them (then clear them) at the top of the sidebar on the next run. The current tests do not cover this path, which is why they pass.
 
-### Low (1)
-- **tests/integration/test_api.py:203** — The test function signature is about 101 characters, longer than the lines the surrounding tests wrap. It may exceed the configured line length if ruff's limit is 100. *(consistency)*
-  - status: skipped
-  - dev_reasoning: False positive: ruff (line-length 100) passes.
-  - ai_reasoning: Wrap the parameters like the neighboring tests. Ignore this if ruff is already clean at the configured limit (PROGRESS.md says it is).
+### Low (2)
+- **src/personal_rag/api_client.py:72** — A 200 response with an unexpected body (missing key, non-JSON, wrong item shape) raises `KeyError`, `ValueError` or `ValidationError` from `health()`, `list_documents()` and `upload()` (lines 72, 82, 92). These are not `ApiError`, so the UI's `except (ApiError, ApiUnavailableError)` does not catch them and the Streamlit page shows a stack trace. `ask()` already handles this case. *(consistency)*
+  - status: open
+  - dev_reasoning: N/A
+  - ai_reasoning: Wrap parsing in try/except (`ValueError`, `KeyError`, `TypeError`, `ValidationError`) and raise `ApiError` with a generic detail, as `ask()` does.
+- **ui/app.py:91** — Document filenames (user-controlled) are interpolated into `st.markdown` with `**...**`, so names containing markdown syntax render oddly or inject links/images. No HTML execution, so impact is cosmetic. *(maintainability)*
+  - status: open
+  - dev_reasoning: N/A
+  - ai_reasoning: Escape markdown in the filename, or render it with `st.text`/`st.write` of a plain string with `unsafe_allow_html` left off and special characters escaped.
 
 ## Reviewed files
+- .code-reviews/brainx-review.md (deleted, previous review)
 - PROGRESS.md
-- src/personal_rag/api/main.py
+- src/personal_rag/api_client.py
+- tests/harness.py
 - tests/integration/test_api.py
+- tests/integration/test_ui.py
+- ui/app.py

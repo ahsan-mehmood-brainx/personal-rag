@@ -6,7 +6,6 @@ network is used.
 
 import threading
 from collections.abc import Iterator
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -20,35 +19,7 @@ from personal_rag.schemas import GroundedAnswer
 from personal_rag.store.vector_store import VectorStore
 from tests.fakes import FakeClassifier, FakeEmbedder, FakeGenerator
 from tests.fixtures.make_fixtures import make_scanned_pdf
-
-MAX_BYTES = 200_000
-
-
-class Harness:
-    """Holds the fakes so tests can tweak them after the app is built."""
-
-    def __init__(self, tmp_path: Path) -> None:
-        self.tmp_path = tmp_path
-        self.embedder = FakeEmbedder()
-        self.classifier = FakeClassifier("personal")
-        self.generator = FakeGenerator()
-        self.store = VectorStore(tmp_path / "chroma", "fake-embedding-model")
-        self.ingestion = IngestionService(
-            embedder=self.embedder, store=self.store, uploads_dir=tmp_path / "uploads",
-            max_bytes=MAX_BYTES, chunk_size=400, overlap=60,
-        )
-        self.pipeline = QueryPipeline(
-            classifier=self.classifier, embedder=self.embedder, store=self.store,
-            generator=self.generator, top_k=5, similarity_threshold=0.2,
-            max_question_chars=300, today=lambda: date(2026, 6, 1),
-        )
-
-    def context(self) -> ApiContext:
-        return ApiContext(
-            max_upload_bytes=MAX_BYTES, embedding_model="fake-embedding-model",
-            store=self.store, ingestion=self.ingestion, pipeline=self.pipeline,
-            write_lock=threading.Lock(),
-        )
+from tests.harness import MAX_BYTES, Harness
 
 
 @pytest.fixture

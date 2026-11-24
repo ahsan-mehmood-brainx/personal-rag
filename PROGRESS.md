@@ -100,3 +100,18 @@ Dependency audit (`uv export` + `uvx pip-audit`, runtime deps, 2026-11-24):
   it is not exposed. No fixed version is published and the lock already has the latest chromadb,
   so no bump is possible. Revisit when a fix ships. No other vulnerable packages.
 Checks: ruff clean, 202 tests pass.
+
+## Phase 5: UI (done)
+Built: `src/personal_rag/api_client.py` (httpx wrapper, error translation, no logic),
+`ui/app.py` (Streamlit: sidebar with API health, multi-file uploader + "Add to knowledge base"
+button, document list with delete buttons; chat with display-only history; colored status badges;
+expandable Sources; "Show internals" toggle that sends `debug=true` and shows classifier
+decision, every retrieved chunk vs threshold, latency, tokens), `tests/harness.py` (shared
+fake-backed API context), `tests/integration/test_ui.py` (12 tests via Streamlit `AppTest`
+against the real FastAPI app with fakes, plus ApiClient unit tests).
+Decisions:
+- The HTTP client lives in the package, not `ui/`, so it is importable/testable without Streamlit.
+- UI reads only `API_BASE_URL` from the environment (it never loads settings or the API key).
+- A 502 from `/ask` is rendered as a normal "Error" badge using the fixed message body.
+- Streamlit server smoke-tested headless (health and index return 200).
+Checks: ruff clean, 221 tests pass. (Review-hook fixes: flash messages survive rerun, malformed 200 bodies become ApiError, Markdown escaped in names.)
