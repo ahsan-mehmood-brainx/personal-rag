@@ -141,3 +141,19 @@ RESUME HERE once a key is in `.env` (user adds it at the end):
 3. One final run with `--repeats 3`. Report tokens for every run.
 4. Set `.env.example` SIMILARITY_THRESHOLD to the calibrated value and tell the user the value.
 Checks: ruff clean, 260 tests pass. (Review fixes: errored runs counted, flagged and fail the exit code; harness reads committed persona files instead of importing tests; real-KB guard compares resolved paths.)
+
+## Phase 7: Documentation (done)
+Built: full `README.md`: quick start, config reference, CLI, Mermaid architecture diagram, module
+table, how ingestion and each gate work, API table and error codes, testing, evaluation and
+threshold calibration, prompt tuning, how to write `evals/personal_dataset.yaml` for real documents,
+embedding-model change/reindex, security and privacy, known limitations.
+Verified: documented commands run (`cli --help`, `preview`, uvicorn startup fails fast naming the
+missing variable; with a dummy key and temp DATA_DIR the real API serves /health, /documents,
+/ask -> no_documents, 400 and 415 without any OpenAI call). `git grep -nE "sk-[A-Za-z0-9_-]{20,}"`
+finds nothing.
+Checks: ruff clean, 260 tests pass.
+
+## Overall status
+Phases 0 to 7 complete except the LIVE steps that need OPENAI_API_KEY: Phase 2 ingest/search smoke,
+Phase 3 ask smoke, Phase 6 eval runs, threshold calibration and prompt tuning (see "RESUME HERE"
+under Phase 6). SIMILARITY_THRESHOLD in `.env.example` is still the 0.30 placeholder.
