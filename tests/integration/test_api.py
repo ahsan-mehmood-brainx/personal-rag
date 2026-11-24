@@ -50,8 +50,12 @@ QUESTION = "Where did I work as a software engineer on the forecasting pipeline 
 def test_health_empty_then_populated(client: TestClient, persona_dir: Path) -> None:
     body = client.get("/health").json()
     assert body == {
-        "status": "ok", "documents": 0, "chunks": 0, "embedding_model": "fake-embedding-model",
-        "index_embedding_model": "fake-embedding-model", "index_usable": True,
+        "status": "ok",
+        "documents": 0,
+        "chunks": 0,
+        "embedding_model": "fake-embedding-model",
+        "index_embedding_model": "fake-embedding-model",
+        "index_usable": True,
     }
     upload(client, "cv.md", persona(persona_dir, "cv.md"))
     populated = client.get("/health").json()
@@ -72,7 +76,10 @@ def test_upload_each_persona_format_and_list(client: TestClient, persona_dir: Pa
         assert body["chunk_count"] > 0
     listed = client.get("/documents").json()
     assert {d["filename"] for d in listed} == {
-        "cv.md", "projects.txt", "certifications.docx", "cv_onepage.pdf"
+        "cv.md",
+        "projects.txt",
+        "certifications.docx",
+        "cv_onepage.pdf",
     }
     assert all({"doc_id", "filename", "chunk_count", "ingested_at"} <= set(d) for d in listed)
 
@@ -246,16 +253,29 @@ def test_mismatched_index_returns_503_for_ask_and_upload(tmp_path: Path, persona
     store = VectorStore(tmp_path / "chroma", "other-model")
     embedder = FakeEmbedder("other-model")
     ingestion = IngestionService(
-        embedder=embedder, store=store, uploads_dir=tmp_path / "uploads",
-        max_bytes=MAX_BYTES, chunk_size=400, overlap=60,
+        embedder=embedder,
+        store=store,
+        uploads_dir=tmp_path / "uploads",
+        max_bytes=MAX_BYTES,
+        chunk_size=400,
+        overlap=60,
     )
     pipeline = QueryPipeline(
-        classifier=FakeClassifier(), embedder=embedder, store=store, generator=FakeGenerator(),
-        top_k=5, similarity_threshold=0.2, max_question_chars=300,
+        classifier=FakeClassifier(),
+        embedder=embedder,
+        store=store,
+        generator=FakeGenerator(),
+        top_k=5,
+        similarity_threshold=0.2,
+        max_question_chars=300,
     )
     context = ApiContext(
-        max_upload_bytes=MAX_BYTES, embedding_model="other-model", store=store,
-        ingestion=ingestion, pipeline=pipeline, write_lock=threading.Lock(),
+        max_upload_bytes=MAX_BYTES,
+        embedding_model="other-model",
+        store=store,
+        ingestion=ingestion,
+        pipeline=pipeline,
+        write_lock=threading.Lock(),
     )
     with TestClient(create_app(lambda: context)) as client:
         assert client.get("/health").json()["index_usable"] is False

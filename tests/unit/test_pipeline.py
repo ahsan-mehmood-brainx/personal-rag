@@ -19,9 +19,17 @@ OTHER_TEXT = "Trail running and bouldering are my hobbies outside work."
 
 def chunk(doc: str, index: int, text: str, name: str = "cv.md", page: int | None = None) -> Chunk:
     return Chunk(
-        chunk_id=f"{doc}:{index}", doc_id=doc, filename=name, section="Experience", page=page,
-        chunk_index=index, token_count=10, ingested_at="2026-01-01T00:00:00+00:00",
-        embedding_model="fake-embedding-model", text=text, embed_text=text,
+        chunk_id=f"{doc}:{index}",
+        doc_id=doc,
+        filename=name,
+        section="Experience",
+        page=page,
+        chunk_index=index,
+        token_count=10,
+        ingested_at="2026-01-01T00:00:00+00:00",
+        embedding_model="fake-embedding-model",
+        text=text,
+        embed_text=text,
     )
 
 
@@ -43,8 +51,14 @@ def make(store, embedder, classifier=None, generator=None, threshold=0.2, **kwar
     classifier = classifier or FakeClassifier("personal")
     generator = generator or FakeGenerator()
     pipeline = QueryPipeline(
-        classifier=classifier, embedder=embedder, store=store, generator=generator,
-        top_k=5, similarity_threshold=threshold, max_question_chars=200, today=lambda: TODAY,
+        classifier=classifier,
+        embedder=embedder,
+        store=store,
+        generator=generator,
+        top_k=5,
+        similarity_threshold=threshold,
+        max_question_chars=200,
+        today=lambda: TODAY,
         **kwargs,
     )
     return pipeline, classifier, generator

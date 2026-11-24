@@ -11,9 +11,17 @@ from tests.fakes import FakeEmbedder
 
 def make_chunk(doc: str, index: int, text: str, page: int | None = None, name: str = "a.md"):
     return Chunk(
-        chunk_id=f"{doc}:{index}", doc_id=doc, filename=name, section="Sec", page=page,
-        chunk_index=index, token_count=5, ingested_at="2026-01-01T00:00:00+00:00",
-        embedding_model="fake-embedding-model", text=text, embed_text=text,
+        chunk_id=f"{doc}:{index}",
+        doc_id=doc,
+        filename=name,
+        section="Sec",
+        page=page,
+        chunk_index=index,
+        token_count=5,
+        ingested_at="2026-01-01T00:00:00+00:00",
+        embedding_model="fake-embedding-model",
+        text=text,
+        embed_text=text,
     )
 
 
@@ -33,9 +41,14 @@ def test_empty_store(store: VectorStore) -> None:
 
 
 def test_query_ranks_by_cosine_similarity(store: VectorStore) -> None:
-    add(store, [make_chunk("d1", 0, "python airflow pipeline"),
-                make_chunk("d1", 1, "kubernetes deployment platform"),
-                make_chunk("d2", 0, "hiking and trail running")])
+    add(
+        store,
+        [
+            make_chunk("d1", 0, "python airflow pipeline"),
+            make_chunk("d1", 1, "kubernetes deployment platform"),
+            make_chunk("d2", 0, "hiking and trail running"),
+        ],
+    )
     hits = store.query(FakeEmbedder().embed_query("python airflow pipeline"), 3)
     assert hits[0].chunk_id == "d1:0"
     assert hits[0].similarity == pytest.approx(1.0, abs=1e-4)
@@ -56,8 +69,10 @@ def test_page_none_round_trips_through_minus_one(store: VectorStore) -> None:
 
 
 def test_list_documents_counts_chunks(store: VectorStore) -> None:
-    add(store, [make_chunk("d1", 0, "a"), make_chunk("d1", 1, "b"),
-                make_chunk("d2", 0, "c", name="b.md")])
+    add(
+        store,
+        [make_chunk("d1", 0, "a"), make_chunk("d1", 1, "b"), make_chunk("d2", 0, "c", name="b.md")],
+    )
     docs = {d.doc_id: d for d in store.list_documents()}
     assert docs["d1"].chunk_count == 2
     assert docs["d2"].filename == "b.md"

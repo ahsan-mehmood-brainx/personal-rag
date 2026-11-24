@@ -23,18 +23,30 @@ class Harness:
         self.generator = FakeGenerator()
         self.store = VectorStore(tmp_path / "chroma", "fake-embedding-model")
         self.ingestion = IngestionService(
-            embedder=self.embedder, store=self.store, uploads_dir=tmp_path / "uploads",
-            max_bytes=MAX_BYTES, chunk_size=400, overlap=60,
+            embedder=self.embedder,
+            store=self.store,
+            uploads_dir=tmp_path / "uploads",
+            max_bytes=MAX_BYTES,
+            chunk_size=400,
+            overlap=60,
         )
         self.pipeline = QueryPipeline(
-            classifier=self.classifier, embedder=self.embedder, store=self.store,
-            generator=self.generator, top_k=5, similarity_threshold=0.2,
-            max_question_chars=300, today=lambda: date(2026, 6, 1),
+            classifier=self.classifier,
+            embedder=self.embedder,
+            store=self.store,
+            generator=self.generator,
+            top_k=5,
+            similarity_threshold=0.2,
+            max_question_chars=300,
+            today=lambda: date(2026, 6, 1),
         )
 
     def context(self) -> ApiContext:
         return ApiContext(
-            max_upload_bytes=MAX_BYTES, embedding_model="fake-embedding-model",
-            store=self.store, ingestion=self.ingestion, pipeline=self.pipeline,
+            max_upload_bytes=MAX_BYTES,
+            embedding_model="fake-embedding-model",
+            store=self.store,
+            ingestion=self.ingestion,
+            pipeline=self.pipeline,
             write_lock=threading.Lock(),
         )

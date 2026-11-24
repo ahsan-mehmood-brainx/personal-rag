@@ -28,8 +28,12 @@ CERTIFICATIONS = [
     ("Certification", "Issuer", "Year", "Credential ID"),
     ("AWS Certified Solutions Architect Associate", "Amazon Web Services", "2021", "AVRY-AWS-2210"),
     ("HashiCorp Certified: Terraform Associate", "HashiCorp", "2022", "AVRY-TF-0933"),
-    ("Certified Kubernetes Application Developer", "Cloud Native Computing Foundation",
-     "2023", "AVRY-CKAD-5518"),
+    (
+        "Certified Kubernetes Application Developer",
+        "Cloud Native Computing Foundation",
+        "2023",
+        "AVRY-CKAD-5518",
+    ),
 ]
 
 PDF_LINES = [

@@ -28,7 +28,8 @@ class StubResponses:
             raise self._error
         usage = (
             SimpleNamespace(
-                input_tokens=7, output_tokens=3,
+                input_tokens=7,
+                output_tokens=3,
                 output_tokens_details=SimpleNamespace(reasoning_tokens=1),
             )
             if self._usage
@@ -41,7 +42,11 @@ def call(stub: StubResponses, **overrides):
     options = {"temperature": None, "reasoning_effort": None, **overrides}
     return parse_structured(
         SimpleNamespace(responses=stub),  # type: ignore[arg-type]
-        model="m", instructions="sys", user_input="hi", schema=ScopeDecision, **options,
+        model="m",
+        instructions="sys",
+        user_input="hi",
+        schema=ScopeDecision,
+        **options,
     )
 
 
@@ -105,15 +110,20 @@ def chunk(label: str, text: str, page: int | None = None) -> LabeledChunk:
     return LabeledChunk(
         label=label,
         chunk=RetrievedChunk(
-            chunk_id="secret-internal-id:0", filename="cv.pdf", section="Experience",
-            page=page, text=text, similarity=0.9,
+            chunk_id="secret-internal-id:0",
+            filename="cv.pdf",
+            section="Experience",
+            page=page,
+            text=text,
+            similarity=0.9,
         ),
     )
 
 
 def test_generator_input_follows_spec_template_and_hides_chunk_ids() -> None:
     text = build_generator_input(
-        "Where did I work?", [chunk("S1", "Worked at A.", 1), chunk("S2", "Skill list.")],
+        "Where did I work?",
+        [chunk("S1", "Worked at A.", 1), chunk("S2", "Skill list.")],
         date(2026, 3, 4),
     )
     assert text.startswith("Today's date: 2026-03-04\n\n<documents>\n")

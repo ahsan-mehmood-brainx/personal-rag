@@ -1,11 +1,11 @@
 ---
-diff_hash: 3c6577478ecaed461c777cdd8b9cd552a49392a2d0a730785069436dc60ab7e3
-reviewed_at: 2026-11-24T13:09:16Z
+diff_hash: 71b0975abe55d17dd50551c53652f4ec97a49e360d27a3f149cfb4194c7bb210
+reviewed_at: 2026-11-24T13:14:30Z
 ---
 
 ## Summary
 
-Phase 5 adds a Streamlit UI (`ui/app.py`), an httpx-based `ApiClient` in the package, a shared test `Harness` extracted from the API tests, and AppTest-based UI tests. Stack: no marker matched (Python/FastAPI/Streamlit), so a generic review was applied. No secrets, injection or auth issues found; the UI holds no API key. Findings concern lost user feedback and unhandled malformed responses.
+Phase 6 adds the evaluation harness: a 54-case YAML dataset, a pydantic case schema/loader, pure metric functions, a markdown report renderer, a CLI runner (`evals/run_eval.py`) with a cost confirmation and a temp-dir synthetic knowledge base, and unit/integration tests using fakes. Stack: no marker matched (Python), so a generic review was applied. No secrets, injection or unsafe-deserialization issues found (`yaml.safe_load` is used, the report omits the API key, reports and the personal dataset are gitignored). One correctness concern: upstream failures are recorded as non-leaks, so an outage can produce a passing report.
 
 ## Findings
 
@@ -14,26 +14,31 @@ Phase 5 adds a Streamlit UI (`ui/app.py`), an httpx-based `ApiClient` in the pac
 ### High (0)
 
 ### Medium (1)
-- **ui/app.py:76** — Upload results and delete errors are rendered with `st.sidebar.success/error` and then `st.rerun()` is called immediately (also line 93), which discards the script run's elements. The user never sees per-file upload status (including failures such as unsupported type, too large, or scanned PDF) or a failed delete message. *(correctness)*
+- **evals/run_eval.py:72** — `run_cases` catches `UpstreamError` and `IndexMismatchError` together with `InvalidQuestionError` and records every one as `status="invalid_input"`, then continues with exit code 0. A bad or expired API key, a rate limit or an outage turns the whole run into "invalid_input" rows. `leak_rate` only counts `answered`, so the report shows Adversarial and Out-of-scope leak rate as 0% PASS, and the threshold calibration is computed from nothing. Failed runs also skip the progress line. *(correctness)*
   - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Store the messages in `st.session_state` before `st.rerun()` and render them (then clear them) at the top of the sidebar on the next run. The current tests do not cover this path, which is why they pass.
+  - ai_reasoning: Treat only `InvalidQuestionError` as a recordable outcome. For `UpstreamError`/`IndexMismatchError`, record a distinct status (for example `error`), print it in progress, count errored runs in the report header, mark the target rows `n/a` or `MISS` when errors exist, and return a non-zero exit code (or abort after N consecutive upstream errors to avoid spending money on a dead key).
 
 ### Low (2)
-- **src/personal_rag/api_client.py:72** — A 200 response with an unexpected body (missing key, non-JSON, wrong item shape) raises `KeyError`, `ValueError` or `ValidationError` from `health()`, `list_documents()` and `upload()` (lines 72, 82, 92). These are not `ApiError`, so the UI's `except (ApiError, ApiUnavailableError)` does not catch them and the Streamlit page shows a stack trace. `ask()` already handles this case. *(consistency)*
+- **evals/run_eval.py:24** — The runner, which lives in the `evals` package, imports `tests.fixtures.make_fixtures`. A non-test tool depends on the test tree, which only works when run from the repo root with `tests` importable. *(consistency)*
   - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Wrap parsing in try/except (`ValueError`, `KeyError`, `TypeError`, `ValidationError`) and raise `ApiError` with a generic detail, as `ask()` does.
-- **ui/app.py:91** — Document filenames (user-controlled) are interpolated into `st.markdown` with `**...**`, so names containing markdown syntax render oddly or inject links/images. No HTML execution, so impact is cosmetic. *(maintainability)*
+  - ai_reasoning: Acceptable for a dev-only harness, but consider moving the persona builder to a shared module (for example `evals/persona.py`) that both `tests` and `evals` import.
+- **evals/run_eval.py:139** — The guard that stops `--kb real` from using the default dataset compares `Path` objects, so an absolute path or `evals/../evals/dataset.yaml` to the same file bypasses it. The result is synthetic-persona questions run against the real index, which wastes API spend and yields a meaningless report. *(correctness)*
   - status: open
   - dev_reasoning: N/A
-  - ai_reasoning: Escape markdown in the filename, or render it with `st.text`/`st.write` of a plain string with `unsafe_allow_html` left off and special characters escaped.
+  - ai_reasoning: Compare `args.dataset.resolve()` with `DEFAULT_DATASET.resolve()`.
 
 ## Reviewed files
-- .code-reviews/brainx-review.md (deleted, previous review)
+- .code-reviews/brainx-review.md (deleted, previous review replaced)
 - PROGRESS.md
-- src/personal_rag/api_client.py
-- tests/harness.py
-- tests/integration/test_api.py
-- tests/integration/test_ui.py
-- ui/app.py
+- pyproject.toml
+- evals/__init__.py
+- evals/cases.py
+- evals/dataset.yaml
+- evals/metrics.py
+- evals/report.py
+- evals/run_eval.py
+- tests/integration/test_eval_harness.py
+- tests/unit/test_eval_dataset.py (skimmed)
+- tests/unit/test_eval_metrics.py (skimmed)

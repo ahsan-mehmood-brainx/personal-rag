@@ -76,14 +76,18 @@ def test_merge_does_not_repeat_parent_heading() -> None:
 
 
 def test_small_last_section_stays_alone() -> None:
-    merged = merge_small_sections([Section(text=sentence_block(10), heading="A"),
-                                   Section(text="tiny", heading="B")])
+    merged = merge_small_sections(
+        [Section(text=sentence_block(10), heading="A"), Section(text="tiny", heading="B")]
+    )
     assert [s.heading for s in merged] == ["A", "B"]
 
 
 def test_chain_of_small_sections_merges_until_big_enough() -> None:
-    sections = [Section(text="a", heading="X"), Section(text="b", heading="Y"),
-                Section(text=sentence_block(10), heading="Z")]
+    sections = [
+        Section(text="a", heading="X"),
+        Section(text="b", heading="Y"),
+        Section(text=sentence_block(10), heading="Z"),
+    ]
     merged = merge_small_sections(sections)
     assert len(merged) == 1
     assert merged[0].heading == "X / Y / Z"
@@ -117,8 +121,10 @@ def test_missing_heading_becomes_general() -> None:
 
 
 def test_metadata_fields() -> None:
-    sections = [Section(text=sentence_block(10), heading="A", page=3),
-                Section(text=sentence_block(10), heading="B")]
+    sections = [
+        Section(text=sentence_block(10), heading="A", page=3),
+        Section(text=sentence_block(10), heading="B"),
+    ]
     chunks = chunks_for(sections, size=400)
     assert [c.chunk_id for c in chunks] == ["abc123:0", "abc123:1"]
     assert [c.chunk_index for c in chunks] == [0, 1]

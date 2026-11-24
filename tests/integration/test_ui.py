@@ -107,9 +107,7 @@ def test_invalid_question_shows_error_not_crash(backend, persona_dir: Path) -> N
 
 def test_api_offline_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     def dead(_url: str) -> httpx.Client:
-        return httpx.Client(
-            base_url="http://127.0.0.1:1", transport=httpx.MockTransport(_refuse)
-        )
+        return httpx.Client(base_url="http://127.0.0.1:1", transport=httpx.MockTransport(_refuse))
 
     monkeypatch.setattr(api_client, "make_http_client", dead)
     app = run_app()
@@ -153,11 +151,14 @@ def test_client_ask_rejects_unexpected_body() -> None:
     assert "boom" not in info.value.detail
 
 
-@pytest.mark.parametrize("call", [
-    lambda c: c.health(),
-    lambda c: c.list_documents(),
-    lambda c: c.upload("a.md", b"x", None),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.health(),
+        lambda c: c.list_documents(),
+        lambda c: c.upload("a.md", b"x", None),
+    ],
+)
 @pytest.mark.parametrize("body", [httpx.Response(200, text="not json")])
 def test_client_wraps_non_json_200_bodies_in_api_error(call, body: httpx.Response) -> None:
     with pytest.raises(ApiError):

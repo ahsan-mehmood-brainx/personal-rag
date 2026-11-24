@@ -23,8 +23,12 @@ def store(tmp_path: Path) -> VectorStore:
 @pytest.fixture
 def service(tmp_path: Path, embedder: FakeEmbedder, store: VectorStore) -> IngestionService:
     return IngestionService(
-        embedder=embedder, store=store, uploads_dir=tmp_path / "uploads",
-        max_bytes=1024 * 1024, chunk_size=400, overlap=60,
+        embedder=embedder,
+        store=store,
+        uploads_dir=tmp_path / "uploads",
+        max_bytes=1024 * 1024,
+        chunk_size=400,
+        overlap=60,
     )
 
 
@@ -125,13 +129,21 @@ def test_ingest_refused_when_index_built_with_other_model(
 ) -> None:
     VectorStore(tmp_path / "chroma", "old-model").add_chunks([], [])
     seed = IngestionService(
-        embedder=FakeEmbedder("old-model"), store=VectorStore(tmp_path / "chroma", "old-model"),
-        uploads_dir=tmp_path / "uploads", max_bytes=10**6, chunk_size=400, overlap=60,
+        embedder=FakeEmbedder("old-model"),
+        store=VectorStore(tmp_path / "chroma", "old-model"),
+        uploads_dir=tmp_path / "uploads",
+        max_bytes=10**6,
+        chunk_size=400,
+        overlap=60,
     )
     seed.ingest("cv.md", persona(persona_dir, "cv.md"))
     mismatched = IngestionService(
-        embedder=FakeEmbedder("new-model"), store=VectorStore(tmp_path / "chroma", "new-model"),
-        uploads_dir=tmp_path / "uploads", max_bytes=10**6, chunk_size=400, overlap=60,
+        embedder=FakeEmbedder("new-model"),
+        store=VectorStore(tmp_path / "chroma", "new-model"),
+        uploads_dir=tmp_path / "uploads",
+        max_bytes=10**6,
+        chunk_size=400,
+        overlap=60,
     )
     with pytest.raises(IndexMismatchError):
         mismatched.ingest("projects.txt", persona(persona_dir, "projects.txt"))
@@ -141,8 +153,12 @@ def test_reindex_rebuilds_with_new_model(tmp_path: Path, persona_dir: Path) -> N
     uploads = tmp_path / "uploads"
     old_store = VectorStore(tmp_path / "chroma", "old-model")
     old = IngestionService(
-        embedder=FakeEmbedder("old-model"), store=old_store, uploads_dir=uploads,
-        max_bytes=10**6, chunk_size=400, overlap=60,
+        embedder=FakeEmbedder("old-model"),
+        store=old_store,
+        uploads_dir=uploads,
+        max_bytes=10**6,
+        chunk_size=400,
+        overlap=60,
     )
     for name in ("cv.md", "projects.txt"):
         old.ingest(name, persona(persona_dir, name))
@@ -152,8 +168,12 @@ def test_reindex_rebuilds_with_new_model(tmp_path: Path, persona_dir: Path) -> N
     new_store = VectorStore(tmp_path / "chroma", "new-model")
     assert not new_store.usable
     new = IngestionService(
-        embedder=new_embedder, store=new_store, uploads_dir=uploads,
-        max_bytes=10**6, chunk_size=400, overlap=60,
+        embedder=new_embedder,
+        store=new_store,
+        uploads_dir=uploads,
+        max_bytes=10**6,
+        chunk_size=400,
+        overlap=60,
     )
     result = new.reindex()
     assert result.documents == 2

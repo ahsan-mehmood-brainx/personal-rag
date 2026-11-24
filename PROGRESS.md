@@ -115,3 +115,29 @@ Decisions:
 - A 502 from `/ask` is rendered as a normal "Error" badge using the fixed message body.
 - Streamlit server smoke-tested headless (health and index return 200).
 Checks: ruff clean, 221 tests pass. (Review-hook fixes: flash messages survive rerun, malformed 200 bodies become ApiError, Markdown escaped in names.)
+
+## Phase 6: Evaluation (harness DONE; live runs and tuning NOT DONE, need OPENAI_API_KEY)
+Built: `evals/dataset.yaml` (54 cases: 19 answerable, 8 missing, 12 out_of_scope, 6 topic_overlap,
+6 adversarial, 3 meta, written against the persona), `evals/cases.py` (schema/loader),
+`evals/metrics.py` (pure formulas), `evals/report.py` (markdown report with spec 12.5 target
+table), `evals/run_eval.py` (CLI: `--dataset --repeats --kb synthetic|real --yes --report-dir`),
+tests: metrics, dataset sanity (incl. guard that no eval question appears in `src/`), harness
+end to end with fakes (confirmation prompt, call estimate, temp data dir, report).
+Decisions:
+- `--kb synthetic` builds services against a TemporaryDirectory data dir (`Settings.model_copy`);
+  the real DATA_DIR is never opened (a test asserts it is not even created).
+- `--kb real` refuses the default dataset; use `--dataset evals/personal_dataset.yaml`.
+- Report prints model IDs/tunables only (never the key or owner name). Query-embedding tokens
+  in the report are tiktoken estimates; ingestion embedding tokens are API-reported.
+- Threshold suggestion: if answerable and missing top-1 scores separate, report the gap;
+  otherwise the cut that classifies the most runs correctly.
+- must_include for date arithmetic uses "3 years" / "2 years"; if the model phrases it as
+  words ("three years") that is a dataset brittleness to fix, not an app bug.
+RESUME HERE once a key is in `.env` (user adds it at the end):
+1. `uv run python -m evals.run_eval --yes --repeats 1` (writes evals/reports/<ts>.md)
+2. Read failures + threshold suggestion. Up to 3 tuning iterations (SIMILARITY_THRESHOLD in
+   .env.example default, then prompts in llm/prompts.py), re-running with --repeats 1 and
+   recording before/after metrics here.
+3. One final run with `--repeats 3`. Report tokens for every run.
+4. Set `.env.example` SIMILARITY_THRESHOLD to the calibrated value and tell the user the value.
+Checks: ruff clean, 260 tests pass. (Review fixes: errored runs counted, flagged and fail the exit code; harness reads committed persona files instead of importing tests; real-KB guard compares resolved paths.)
