@@ -90,6 +90,8 @@ def get_store(ctx: Annotated[ApiContext, Depends(get_context)]) -> VectorStore:
 class AskRequest(BaseModel):
     question: str
     debug: bool = False
+    # Opt-in: lets an out-of-scope question be answered by a web search instead of refused.
+    allow_external_search: bool = False
 
 
 class UploadResponse(BaseModel):
@@ -203,7 +205,9 @@ def create_app(context_factory: Callable[[], ApiContext] = default_context) -> F
     def ask(
         body: AskRequest, pipeline: Annotated[QueryPipeline, Depends(get_pipeline)]
     ) -> JSONResponse:
-        response: AskResponse = pipeline.ask(body.question, debug=body.debug)
+        response: AskResponse = pipeline.ask(
+            body.question, debug=body.debug, allow_external_search=body.allow_external_search
+        )
         # An upstream failure is HTTP 502, but the body is still the fixed-message AskResponse
         # so clients can show it without special handling.
         code = 502 if response.status == "error" else 200

@@ -5,6 +5,10 @@ Pipeline position: the heart of the app. Every question ends in exactly one stat
     validate input -> no-documents check -> [gate 1] scope -> [gate 2] evidence ->
     generate -> [gate 3] citation validation -> (optional) groundedness check -> response
 
+External search is opt-in per request (`allow_external_search`). It only changes what happens
+to a question gate 1 classifies as out of scope: it is answered by a web search instead of the
+fixed refusal. Personal questions take the same document-only path either way.
+
 The system fails closed: any gate that cannot reach a valid decision (exception, timeout,
 unparseable output) produces `error`, never an unguarded answer. Refusal text is fixed
 (`messages.py`); the LLM never writes one.
@@ -23,6 +27,7 @@ from personal_rag.query.generator import AnswerGenerator, GroundednessChecker
 from personal_rag.query.retriever import RetrievalResult, retrieve
 from personal_rag.query.scope_guard import ScopeClassifier
 from personal_rag.query.validator import validate_answer
+from personal_rag.query.web_search import WebSearcher
 from personal_rag.schemas import (
     AskResponse,
     DebugChunk,
@@ -31,6 +36,7 @@ from personal_rag.schemas import (
     Source,
     Status,
     TokenUsage,
+    WebSource,
 )
 from personal_rag.store.vector_store import VectorStore
 
@@ -55,6 +61,7 @@ class QueryPipeline:
         similarity_threshold: float,
         max_question_chars: int,
         groundedness_checker: GroundednessChecker | None = None,
+        web_searcher: WebSearcher | None = None,
         today: Callable[[], date] = date.today,
     ) -> None:
         self._classifier = classifier
@@ -65,13 +72,19 @@ class QueryPipeline:
         self._threshold = similarity_threshold
         self._max_chars = max_question_chars
         self._groundedness = groundedness_checker
+        self._web_searcher = web_searcher
         self._today = today
 
     # --- public API -------------------------------------------------------------------
 
-    def ask(self, question: str, debug: bool = False) -> AskResponse:
+    def ask(
+        self, question: str, debug: bool = False, allow_external_search: bool = False
+    ) -> AskResponse:
         """Answer one question. Raises InvalidQuestionError or IndexMismatchError for bad
-        input or an unusable index; every other outcome is a response with a status."""
+        input or an unusable index; every other outcome is a response with a status.
+
+        `allow_external_search` lets an out-of-scope question be answered by a web search.
+        It has no effect when no web searcher is configured."""
         question = question.strip()
         if not question:
             raise InvalidQuestionError("The question is empty.")
@@ -85,7 +98,7 @@ class QueryPipeline:
             return self._finish("no_documents", messages.NO_DOCUMENTS, trace, debug)
 
         try:
-            return self._run(question, trace, debug)
+            return self._run(question, trace, debug, allow_external_search)
         except UpstreamError:
             return self._finish("error", messages.ERROR, trace, debug)
         except Exception:
@@ -95,7 +108,9 @@ class QueryPipeline:
 
     # --- steps ------------------------------------------------------------------------
 
-    def _run(self, question: str, trace: "_Trace", debug: bool) -> AskResponse:
+    def _run(
+        self, question: str, trace: "_Trace", debug: bool, allow_external_search: bool
+    ) -> AskResponse:
         # Gate 1: scope
         with trace.step("scope"):
             decision, usage = self._classifier.classify(question)
@@ -103,6 +118,8 @@ class QueryPipeline:
         trace.category, trace.reason = decision.category, decision.reason
         logger.info("step=scope category=%s ms=%.0f", decision.category, trace.ms["scope"])
         if decision.category == "out_of_scope":
+            if allow_external_search and self._web_searcher is not None:
+                return self._search_web(self._web_searcher, question, trace, debug)
             return self._finish("out_of_scope", messages.OUT_OF_SCOPE, trace, debug)
         if decision.category == "meta":
             count = len(self._store.list_documents())
@@ -152,6 +169,17 @@ class QueryPipeline:
 
         return self._finish("answered", validated.text, trace, debug, sources=_sources(cited))
 
+    def _search_web(
+        self, searcher: WebSearcher, question: str, trace: "_Trace", debug: bool
+    ) -> AskResponse:
+        with trace.step("web_search"):
+            result, usage = searcher.search(question)
+        trace.add_usage("web_search", usage)
+        logger.info(
+            "step=web_search sources=%d ms=%.0f", len(result.sources), trace.ms["web_search"]
+        )
+        return self._finish("web_answered", result.answer, trace, debug, web_sources=result.sources)
+
     def _finish(
         self,
         status: Status,
@@ -159,12 +187,14 @@ class QueryPipeline:
         trace: "_Trace",
         debug: bool,
         sources: list[Source] | None = None,
+        web_sources: list[WebSource] | None = None,
     ) -> AskResponse:
         logger.info("result status=%s total_ms=%.0f", status, sum(trace.ms.values()))
         return AskResponse(
             status=status,
             answer=answer,
             sources=sources or [],
+            web_sources=web_sources or [],
             debug=trace.to_debug() if debug else None,
         )
 

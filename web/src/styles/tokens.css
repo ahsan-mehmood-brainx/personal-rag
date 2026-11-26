@@ -1,0 +1,162 @@
+/*
+ * Design tokens. Components use only these variables, so themes change in one place.
+ * Theme resolution: [data-theme] on <html> wins; otherwise the OS preference applies.
+ */
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  --header-height: 56px;
+  --sidebar-width: 280px;
+  --content-width: 780px;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration: 160ms;
+
+  /* Light palette */
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f2f5;
+  --color-surface-hover: #eceff3;
+  --color-border: #e1e4ea;
+  --color-border-strong: #c9ced8;
+  --color-text: #171a20;
+  --color-text-muted: #5a6270;
+  --color-text-subtle: #808897;
+  --color-accent: #3b5bdb;
+  --color-accent-hover: #3049b8;
+  --color-accent-soft: #e8edff;
+  --color-accent-text: #ffffff;
+  --color-focus: #5c7cfa;
+
+  --color-success: #1f7a4d;
+  --color-success-soft: #e3f5ec;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #fff3d6;
+  --color-danger: #c22f2f;
+  --color-danger-hover: #a52626;
+  --color-danger-soft: #fde8e8;
+  --color-info: #1c64b0;
+  --color-info-soft: #e3effc;
+  --color-neutral: #4f5866;
+  --color-neutral-soft: #eceef2;
+
+  --color-user-bubble: #3b5bdb;
+  --color-user-bubble-text: #ffffff;
+  --color-skeleton: #e6e9ee;
+  --color-skeleton-shine: #f3f5f8;
+  --color-overlay: rgb(15 18 25 / 0.45);
+
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 4px 12px rgb(16 24 40 / 0.08), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 16px 40px rgb(16 24 40 / 0.16);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #0e1015;
+    --color-surface: #161920;
+    --color-surface-2: #1d212a;
+    --color-surface-hover: #232834;
+    --color-border: #2a303c;
+    --color-border-strong: #3a4150;
+    --color-text: #e8eaf0;
+    --color-text-muted: #a0a8b8;
+    --color-text-subtle: #7c8596;
+    --color-accent: #7b93f6;
+    --color-accent-hover: #9aacf8;
+    --color-accent-soft: #232c4d;
+    --color-accent-text: #0e1015;
+    --color-focus: #9aacf8;
+
+    --color-success: #5fd39a;
+    --color-success-soft: #173326;
+    --color-warning: #f2c14e;
+    --color-warning-soft: #3a2e12;
+    --color-danger: #ff7b7b;
+    --color-danger-hover: #ff9a9a;
+    --color-danger-soft: #3d1c1f;
+    --color-info: #7cb6f5;
+    --color-info-soft: #172a40;
+    --color-neutral: #b3bac8;
+    --color-neutral-soft: #262b35;
+
+    --color-user-bubble: #3d55c4;
+    --color-user-bubble-text: #ffffff;
+    --color-skeleton: #222733;
+    --color-skeleton-shine: #2b3140;
+    --color-overlay: rgb(0 0 0 / 0.6);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #0e1015;
+  --color-surface: #161920;
+  --color-surface-2: #1d212a;
+  --color-surface-hover: #232834;
+  --color-border: #2a303c;
+  --color-border-strong: #3a4150;
+  --color-text: #e8eaf0;
+  --color-text-muted: #a0a8b8;
+  --color-text-subtle: #7c8596;
+  --color-accent: #7b93f6;
+  --color-accent-hover: #9aacf8;
+  --color-accent-soft: #232c4d;
+  --color-accent-text: #0e1015;
+  --color-focus: #9aacf8;
+
+  --color-success: #5fd39a;
+  --color-success-soft: #173326;
+  --color-warning: #f2c14e;
+  --color-warning-soft: #3a2e12;
+  --color-danger: #ff7b7b;
+  --color-danger-hover: #ff9a9a;
+  --color-danger-soft: #3d1c1f;
+  --color-info: #7cb6f5;
+  --color-info-soft: #172a40;
+  --color-neutral: #b3bac8;
+  --color-neutral-soft: #262b35;
+
+  --color-user-bubble: #3d55c4;
+  --color-user-bubble-text: #ffffff;
+  --color-skeleton: #222733;
+  --color-skeleton-shine: #2b3140;
+  --color-overlay: rgb(0 0 0 / 0.6);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+
+  color-scheme: dark;
+}

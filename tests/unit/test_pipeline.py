@@ -10,7 +10,13 @@ from personal_rag.llm.client import UpstreamError
 from personal_rag.query.pipeline import InvalidQuestionError, QueryPipeline
 from personal_rag.schemas import Chunk, GroundedAnswer
 from personal_rag.store.vector_store import IndexMismatchError, VectorStore
-from tests.fakes import FakeClassifier, FakeEmbedder, FakeGenerator, FakeGroundednessChecker
+from tests.fakes import (
+    FakeClassifier,
+    FakeEmbedder,
+    FakeGenerator,
+    FakeGroundednessChecker,
+    FakeWebSearcher,
+)
 
 TODAY = date(2026, 6, 1)
 CV_TEXT = "I worked at Northwind Analytics as a software engineer on the forecasting pipeline."
@@ -258,3 +264,58 @@ def test_groundedness_failure_fails_closed(store, embedder) -> None:
     checker = FakeGroundednessChecker(raises=UpstreamError("down"))
     pipeline, _, _ = make(store, embedder, groundedness_checker=checker)
     assert pipeline.ask(QUESTION).status == "error"
+
+
+# --- external search ------------------------------------------------------------------------
+
+
+def test_out_of_scope_with_external_search_answers_from_the_web(store, embedder) -> None:
+    searcher = FakeWebSearcher()
+    pipeline, _, generator = make(
+        store, embedder, classifier=FakeClassifier("out_of_scope"), web_searcher=searcher
+    )
+    response = pipeline.ask("What is Kubernetes?", debug=True, allow_external_search=True)
+    assert response.status == "web_answered"
+    assert response.answer == "Fake web answer."
+    assert [s.url for s in response.web_sources] == ["https://example.com/page"]
+    assert response.sources == []
+    assert searcher.calls == ["What is Kubernetes?"]
+    # The web step never touches the personal documents.
+    assert embedder.query_calls == [] and generator.calls == []
+    assert response.debug is not None and "web_search" in response.debug.token_usage
+
+
+def test_external_search_off_keeps_the_fixed_refusal(store, embedder) -> None:
+    searcher = FakeWebSearcher()
+    pipeline, _, _ = make(
+        store, embedder, classifier=FakeClassifier("out_of_scope"), web_searcher=searcher
+    )
+    response = pipeline.ask("What is Kubernetes?")
+    assert response.status == "out_of_scope"
+    assert response.answer == messages.OUT_OF_SCOPE
+    assert searcher.calls == []
+
+
+def test_external_search_never_used_for_personal_questions(store, embedder) -> None:
+    searcher = FakeWebSearcher()
+    pipeline, _, _ = make(store, embedder, web_searcher=searcher)
+    assert pipeline.ask(QUESTION, allow_external_search=True).status == "answered"
+    assert pipeline.ask("What is my salary?", allow_external_search=True).status == "not_found"
+    assert searcher.calls == []
+
+
+def test_external_search_without_a_searcher_refuses(store, embedder) -> None:
+    pipeline, _, _ = make(store, embedder, classifier=FakeClassifier("out_of_scope"))
+    response = pipeline.ask("What is Kubernetes?", allow_external_search=True)
+    assert response.status == "out_of_scope"
+
+
+def test_web_search_failure_fails_closed(store, embedder) -> None:
+    searcher = FakeWebSearcher(raises=UpstreamError("boom"))
+    pipeline, _, _ = make(
+        store, embedder, classifier=FakeClassifier("out_of_scope"), web_searcher=searcher
+    )
+    response = pipeline.ask("What is Kubernetes?", allow_external_search=True)
+    assert response.status == "error"
+    assert response.answer == messages.ERROR
+    assert response.web_sources == []

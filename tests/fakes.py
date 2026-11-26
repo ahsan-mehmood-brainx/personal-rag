@@ -16,6 +16,8 @@ from personal_rag.schemas import (
     LabeledChunk,
     ScopeDecision,
     TokenUsage,
+    WebAnswer,
+    WebSource,
 )
 
 DIMENSIONS = 256
@@ -102,3 +104,21 @@ class FakeGroundednessChecker:
             raise self.raises
         claims = [] if self.supported else ["an unsupported claim"]
         return GroundednessVerdict(supported=self.supported, unsupported_claims=claims), FAKE_USAGE
+
+
+class FakeWebSearcher:
+    """Returns a preset web answer (or raises) and records the questions it saw."""
+
+    def __init__(self, answer: WebAnswer | None = None, raises: Exception | None = None) -> None:
+        self.answer = answer or WebAnswer(
+            answer="Fake web answer.",
+            sources=[WebSource(title="Example", url="https://example.com/page")],
+        )
+        self.raises = raises
+        self.calls: list[str] = []
+
+    def search(self, question: str) -> tuple[WebAnswer, TokenUsage]:
+        self.calls.append(question)
+        if self.raises:
+            raise self.raises
+        return self.answer, FAKE_USAGE

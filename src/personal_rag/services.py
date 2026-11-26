@@ -14,6 +14,7 @@ from personal_rag.llm.embeddings import OpenAIEmbedder
 from personal_rag.query.generator import OpenAIAnswerGenerator, OpenAIGroundednessChecker
 from personal_rag.query.pipeline import QueryPipeline
 from personal_rag.query.scope_guard import OpenAIScopeClassifier
+from personal_rag.query.web_search import OpenAIWebSearcher
 from personal_rag.store.vector_store import VectorStore
 
 
@@ -70,5 +71,11 @@ def build_services(settings: Settings) -> Services:
         similarity_threshold=settings.similarity_threshold,
         max_question_chars=settings.max_question_chars,
         groundedness_checker=groundedness,
+        web_searcher=OpenAIWebSearcher(
+            client,
+            model=settings.generation_model,
+            temperature=settings.llm_temperature,
+            reasoning_effort=settings.generation_reasoning_effort,
+        ),
     )
     return Services(embedder=embedder, store=store, ingestion=ingestion, pipeline=pipeline)

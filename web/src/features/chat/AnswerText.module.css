@@ -1,0 +1,21 @@
+.answer {
+  overflow-wrap: anywhere;
+}
+
+.answer > * + * {
+  margin-top: var(--space-3);
+}
+
+.answer ul,
+.answer ol {
+  margin-bottom: 0;
+  padding-left: 1.35em;
+}
+
+.answer li + li {
+  margin-top: var(--space-1);
+}
+
+.answer strong {
+  font-weight: 650;
+}
