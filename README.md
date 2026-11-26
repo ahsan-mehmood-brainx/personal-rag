@@ -48,6 +48,13 @@ Open <http://localhost:8501>. Upload your documents in the sidebar, click "Add t
 base", then ask questions. Turn on "Show internals" to see the classifier decision, every
 retrieved chunk with its score against the threshold, and per-step latency.
 
+**Web frontend (alternative to Streamlit).** A React app with a documents page, chat with
+history, and light/dark themes lives in [`web/`](web/README.md). With the API running:
+
+```bash
+cd web && npm install && npm run dev   # then open http://127.0.0.1:5173
+```
+
 `.env` is gitignored. Never commit it, and never commit anything under `data/`, which holds your
 documents and the vector index.
 

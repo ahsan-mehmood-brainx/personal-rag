@@ -1,0 +1,151 @@
+.row {
+  display: flex;
+  gap: var(--space-3);
+  animation: appear 200ms var(--ease);
+}
+
+.userRow {
+  justify-content: flex-end;
+}
+
+.assistantRow {
+  align-items: flex-start;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-top: 2px;
+  border-radius: 9px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.bubble {
+  min-width: 0;
+  border-radius: var(--radius-lg);
+}
+
+.user {
+  max-width: min(85%, 600px);
+  padding: var(--space-3) var(--space-4);
+  border-bottom-right-radius: var(--radius-sm);
+  background: var(--color-user-bubble);
+  color: var(--color-user-bubble-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.assistant {
+  flex: 1;
+  max-width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-top-left-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.badgeRow {
+  margin-bottom: var(--space-2);
+}
+
+.notice {
+  margin-top: var(--space-3);
+}
+
+.failed {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border-top-left-radius: var(--radius-sm);
+  background: var(--color-danger-soft);
+}
+
+.failedHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.failedHead svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-danger);
+}
+
+.pending {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.stop {
+  margin-left: var(--space-2);
+}
+
+.dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: bounce 1.1s ease-in-out infinite;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (max-width: 520px) {
+  .avatar {
+    display: none;
+  }
+
+  .user {
+    max-width: 92%;
+  }
+}

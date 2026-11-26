@@ -1,0 +1,8 @@
+.wrap {
+  min-width: 0;
+}
+
+.lock {
+  display: inline;
+  vertical-align: -1px;
+}
