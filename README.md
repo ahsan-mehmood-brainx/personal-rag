@@ -202,7 +202,7 @@ flowchart TD
 | `POST /documents` | Upload one file (multipart field `file`). Returns `ingested`, `duplicate` or `replaced`. |
 | `GET /documents` | List documents with chunk counts. |
 | `DELETE /documents/{doc_id}` | Delete a document's chunks and stored file. |
-| `POST /ask` | Body `{"question": "...", "debug": false}`; returns the answer, sources and optional debug info. |
+| `POST /ask` | Body `{"question": "...", "debug": false, "allow_external_search": false}`; returns the answer, sources and optional debug info. With `allow_external_search: true`, an out-of-scope question is answered by an OpenAI web search (status `web_answered`, links in `web_sources`) instead of refused. |
 
 Error codes: 400 invalid input, 404 unknown document, 413 file too large, 415 unsupported type,
 422 unparseable or scanned document, 502 OpenAI upstream error (the body is still the fixed

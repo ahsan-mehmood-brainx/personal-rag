@@ -12,7 +12,7 @@ export interface AssistantMessage {
   role: 'assistant'
   createdAt: string
   response: AskResponse
-  /** Toggle value sent with the question, so the notice under a refusal stays accurate. */
+  /** External search value sent with this question, so the notice under a refusal stays accurate. */
   externalSearch: boolean
 }
 

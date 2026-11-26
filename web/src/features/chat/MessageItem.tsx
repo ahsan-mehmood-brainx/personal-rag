@@ -3,7 +3,7 @@ import { Button } from '../../components/Button'
 import { Callout } from '../../components/Callout'
 import { Icon } from '../../components/Icon'
 import { AnswerText } from './AnswerText'
-import { InternalsPanel, SourcesList } from './ResponseDetails'
+import { SourcesList, WebSourcesList } from './ResponseDetails'
 import { STATUS_META } from './statusMeta'
 import type { AssistantMessage, ChatMessage, FailedMessage } from './types'
 import styles from './MessageItem.module.css'
@@ -21,8 +21,8 @@ export function ExternalSearchNotice() {
   return (
     <div className={styles.notice} data-testid="external-search-notice">
       <Callout tone="neutral" icon="globe" title="External search is off">
-        This assistant answers only from your uploaded documents, so it can't look up general or
-        outside information. Ask about your own experience, skills or projects instead.
+        This question needs outside information, and answers currently come only from your uploaded
+        documents. Turn on Allow External Search below and ask again to look it up on the web.
       </Callout>
     </div>
   )
@@ -41,7 +41,7 @@ function AssistantBubble({ message }: { message: AssistantMessage }) {
         <AnswerText text={response.answer} />
         {response.status === 'out_of_scope' && !message.externalSearch && <ExternalSearchNotice />}
         <SourcesList sources={response.sources} />
-        {response.debug && <InternalsPanel debug={response.debug} />}
+        <WebSourcesList sources={response.web_sources} />
       </div>
     </article>
   )
@@ -92,7 +92,7 @@ export function MessageItem({ message, onRetry, busy }: MessageItemProps) {
   return <AssistantBubble message={message} />
 }
 
-export function PendingMessage({ onStop }: { onStop: () => void }) {
+export function PendingMessage({ onStop, externalSearch }: { onStop: () => void; externalSearch: boolean }) {
   return (
     <div className={`${styles.row} ${styles.assistantRow}`} data-testid="pending-message">
       <AssistantAvatar />
@@ -102,7 +102,9 @@ export function PendingMessage({ onStop }: { onStop: () => void }) {
           <span />
           <span />
         </span>
-        <span role="status">Searching your documents…</span>
+        <span role="status">
+          {externalSearch ? 'Searching your documents and the web…' : 'Searching your documents…'}
+        </span>
         <Button size="sm" variant="ghost" icon="stop" onClick={onStop} className={styles.stop}>
           Stop
         </Button>

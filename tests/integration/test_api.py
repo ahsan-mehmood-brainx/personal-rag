@@ -156,6 +156,20 @@ def test_ask_out_of_scope(client: TestClient, harness: Harness, persona_dir: Pat
     body = client.post("/ask", json={"question": "Capital of France?"}).json()
     assert body["status"] == "out_of_scope"
     assert body["sources"] == []
+    assert harness.web_searcher.calls == []
+
+
+def test_ask_out_of_scope_with_external_search_returns_web_answer(
+    client: TestClient, harness: Harness, persona_dir: Path
+) -> None:
+    upload(client, "cv.md", persona(persona_dir, "cv.md"))
+    harness.classifier.category = "out_of_scope"
+    payload = {"question": "Capital of France?", "allow_external_search": True}
+    body = client.post("/ask", json=payload).json()
+    assert body["status"] == "web_answered"
+    assert body["answer"] == "Fake web answer."
+    assert body["sources"] == []
+    assert body["web_sources"] == [{"title": "Example", "url": "https://example.com/page"}]
 
 
 def test_ask_not_found_when_model_says_so(

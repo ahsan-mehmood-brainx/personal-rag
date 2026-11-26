@@ -28,15 +28,7 @@ export const config = {
 /** File types the backend accepts (`ALLOWED_EXTENSIONS` in ingestion/validation.py). */
 export const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md'] as const
 
-/**
- * Capabilities the frontend can offer only when the backend supports them.
- *
- * externalSearch: the backend answers strictly from uploaded documents (`POST /ask` accepts
- * only `question` and `debug`, and the scope gate refuses anything needing outside
- * information). Until the backend exposes a flag for it, the UI shows the toggle locked OFF.
- * See web/README.md, "Missing backend APIs".
- */
+/** Capabilities the frontend can offer only when the backend supports them. */
 export const capabilities = {
-  externalSearch: false,
   serverConversationHistory: false,
 } as const

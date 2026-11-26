@@ -71,6 +71,10 @@ function isSource(v: unknown): boolean {
   )
 }
 
+function isWebSource(v: unknown): boolean {
+  return isObj(v) && isStr(v.title) && isStr(v.url)
+}
+
 function isDebugInfo(v: unknown): boolean {
   return (
     isObj(v) &&
@@ -87,11 +91,13 @@ export function isAskResponse(v: unknown): v is AskResponse {
     ASK_STATUSES.includes(v.status as AskResponse['status']) &&
     isStr(v.answer) &&
     (v.sources === undefined || (Array.isArray(v.sources) && v.sources.every(isSource))) &&
+    (v.web_sources === undefined ||
+      (Array.isArray(v.web_sources) && v.web_sources.every(isWebSource))) &&
     (v.debug === undefined || v.debug === null || isDebugInfo(v.debug))
   )
 }
 
 /** Fill optional fields Pydantic may omit, so components never see `undefined`. */
 export function normalizeAskResponse(v: AskResponse): AskResponse {
-  return { ...v, sources: v.sources ?? [], debug: v.debug ?? null }
+  return { ...v, sources: v.sources ?? [], web_sources: v.web_sources ?? [], debug: v.debug ?? null }
 }

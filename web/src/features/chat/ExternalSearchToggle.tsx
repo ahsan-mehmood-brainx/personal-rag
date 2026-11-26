@@ -1,42 +1,32 @@
 /**
- * "Allow External Search" toggle. Defaults to OFF.
+ * "Allow External Search" toggle, under the input. Defaults to OFF.
  *
- * The frontend never searches anything itself; the toggle only decides what is sent to the
- * backend. The current backend has no external-search capability (`capabilities.externalSearch`
- * is false), so the switch is shown locked OFF with the reason, instead of pretending to work.
+ * The frontend never searches anything itself; the value is sent with each question as
+ * `allow_external_search`. It can be flipped at any point in a conversation, including while
+ * an answer is loading: each question uses the value it was sent with.
  */
 import { Badge } from '../../components/Badge'
-import { Icon } from '../../components/Icon'
 import { Switch } from '../../components/Switch'
 import styles from './ExternalSearchToggle.module.css'
 
 interface ExternalSearchToggleProps {
   checked: boolean
-  available: boolean
   onChange: (value: boolean) => void
 }
 
-export function ExternalSearchToggle({ checked, available, onChange }: ExternalSearchToggleProps) {
-  const description = !available ? (
-    <>
-      <Icon name="lock" size={11} className={styles.lock} /> Answers come only from your uploaded
-      documents. External search isn&apos;t supported by this backend yet.
-    </>
-  ) : checked ? (
-    'The assistant may use outside information in addition to your documents.'
-  ) : (
-    'Answers come only from your uploaded documents.'
-  )
-
+export function ExternalSearchToggle({ checked, onChange }: ExternalSearchToggleProps) {
   return (
     <div className={styles.wrap}>
       <Switch
         checked={checked}
         onChange={onChange}
-        disabled={!available}
         label="Allow External Search"
         adornment={<Badge tone={checked ? 'accent' : 'neutral'}>{checked ? 'On' : 'Off'}</Badge>}
-        description={description}
+        description={
+          checked
+            ? 'General questions are answered with a web search. Questions about you still use only your documents.'
+            : 'Answers come only from your uploaded documents.'
+        }
         testId="external-search-toggle"
       />
     </div>

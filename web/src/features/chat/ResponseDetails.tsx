@@ -1,7 +1,6 @@
-/** Expandable "Sources" and "Internals" sections under an assistant answer. */
-import type { DebugInfo, Source } from '../../api/types'
+/** Expandable "Sources" and "Web sources" sections under an assistant answer. */
+import type { Source, WebSource } from '../../api/types'
 import { Icon } from '../../components/Icon'
-import { pluralize } from '../../lib/format'
 import styles from './ResponseDetails.module.css'
 
 function pageText(page: number | null): string | null {
@@ -36,75 +35,52 @@ export function SourcesList({ sources }: { sources: Source[] }) {
   )
 }
 
-export function InternalsPanel({ debug }: { debug: DebugInfo }) {
-  const latency = Object.entries(debug.latency_ms)
-  const tokens = Object.entries(debug.token_usage)
+/** Only http(s) links are rendered as links; anything else (for example `javascript:`) is not. */
+function safeHttpUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : null
+  } catch {
+    return null
+  }
+}
+
+interface WebLink {
+  href: string
+  hostname: string
+  title: string
+}
+
+/** Safe links, deduped on the normalized href (`https://a.com` and `https://a.com/` are one). */
+function toWebLinks(sources: WebSource[]): WebLink[] {
+  const byHref = new Map<string, WebLink>()
+  for (const source of sources) {
+    const url = safeHttpUrl(source.url)
+    if (!url || byHref.has(url.href)) continue
+    byHref.set(url.href, { href: url.href, hostname: url.hostname, title: source.title.trim() || url.hostname })
+  }
+  return [...byHref.values()]
+}
+
+export function WebSourcesList({ sources }: { sources: WebSource[] }) {
+  const links = toWebLinks(sources)
+  if (links.length === 0) return null
   return (
     <details className={styles.details}>
       <summary className={styles.summary}>
         <Icon name="chevron" size={14} className={styles.chevron} />
-        Internals
+        Web sources ({links.length})
       </summary>
-      <dl className={styles.internals}>
-        <dt>Classifier</dt>
-        <dd>
-          <code>{debug.classifier_category ?? 'not run'}</code>
-          {debug.classifier_reason && <span> · {debug.classifier_reason}</span>}
-        </dd>
-
-        <dt>Retrieved</dt>
-        <dd>
-          {debug.retrieved.length === 0 ? (
-            'No retrieval for this question.'
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <caption>
-                  {pluralize(debug.retrieved.length, 'chunk')}, threshold {debug.threshold.toFixed(2)}
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Similarity</th>
-                    <th scope="col">Result</th>
-                    <th scope="col">Document</th>
-                    <th scope="col">Section</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {debug.retrieved.map((hit) => (
-                    <tr key={hit.chunk_id}>
-                      <td>{hit.similarity.toFixed(4)}</td>
-                      <td className={hit.kept ? styles.kept : styles.below}>
-                        {hit.kept ? 'kept' : 'below'}
-                      </td>
-                      <td>{hit.filename}</td>
-                      <td>{hit.section}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </dd>
-
-        {latency.length > 0 && (
-          <>
-            <dt>Latency</dt>
-            <dd>{latency.map(([step, ms]) => `${step} ${Math.round(ms)} ms`).join(' · ')}</dd>
-          </>
-        )}
-
-        {tokens.length > 0 && (
-          <>
-            <dt>Tokens</dt>
-            <dd>
-              {tokens
-                .map(([step, u]) => `${step} ${u.input_tokens} in / ${u.output_tokens} out`)
-                .join(' · ')}
-            </dd>
-          </>
-        )}
-      </dl>
+      <ul className={styles.sources}>
+        {links.map((link) => (
+          <li key={link.href} className={styles.source}>
+            <a className={styles.webLink} href={link.href} target="_blank" rel="noopener noreferrer">
+              {link.title}
+            </a>
+            <p className={styles.sourceMeta}>{link.hostname}</p>
+          </li>
+        ))}
+      </ul>
     </details>
   )
 }

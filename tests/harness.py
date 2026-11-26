@@ -8,7 +8,7 @@ from personal_rag.api.main import ApiContext
 from personal_rag.ingestion.service import IngestionService
 from personal_rag.query.pipeline import QueryPipeline
 from personal_rag.store.vector_store import VectorStore
-from tests.fakes import FakeClassifier, FakeEmbedder, FakeGenerator
+from tests.fakes import FakeClassifier, FakeEmbedder, FakeGenerator, FakeWebSearcher
 
 MAX_BYTES = 200_000
 
@@ -21,6 +21,7 @@ class Harness:
         self.embedder = FakeEmbedder()
         self.classifier = FakeClassifier("personal")
         self.generator = FakeGenerator()
+        self.web_searcher = FakeWebSearcher()
         self.store = VectorStore(tmp_path / "chroma", "fake-embedding-model")
         self.ingestion = IngestionService(
             embedder=self.embedder,
@@ -35,6 +36,7 @@ class Harness:
             embedder=self.embedder,
             store=self.store,
             generator=self.generator,
+            web_searcher=self.web_searcher,
             top_k=5,
             similarity_threshold=0.2,
             max_question_chars=300,

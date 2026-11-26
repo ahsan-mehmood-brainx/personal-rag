@@ -22,7 +22,13 @@ function json(status: number, body: unknown): Response {
 export function installFakeBackend(initial: Partial<FakeBackend> = {}): FakeBackend {
   const state: FakeBackend = {
     documents: initial.documents ?? [],
-    askResponse: initial.askResponse ?? { status: 'answered', answer: 'An answer.', sources: [], debug: null },
+    askResponse: initial.askResponse ?? {
+      status: 'answered',
+      answer: 'An answer.',
+      sources: [],
+      web_sources: [],
+      debug: null,
+    },
     requests: [],
   }
 

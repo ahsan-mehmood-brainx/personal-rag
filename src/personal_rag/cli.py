@@ -159,7 +159,9 @@ def cmd_ask(args: argparse.Namespace) -> int:
     if settings is None:
         return 1
     try:
-        response = build_services(settings).pipeline.ask(args.question, debug=args.debug)
+        response = build_services(settings).pipeline.ask(
+            args.question, debug=args.debug, allow_external_search=args.external_search
+        )
     except (InvalidQuestionError, IndexMismatchError, UpstreamError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -171,6 +173,8 @@ def cmd_ask(args: argparse.Namespace) -> int:
             f"  {source.label}: {source.filename} | {source.section} | page {page} | "
             f"similarity {source.similarity:.3f}"
         )
+    for web_source in response.web_sources:
+        print(f"  web: {web_source.title} | {web_source.url}")
     if response.debug is not None:
         debug = response.debug
         print("\n--- debug ---")
@@ -241,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
     ask = commands.add_parser("ask", help="Ask a question through the full pipeline (OpenAI).")
     ask.add_argument("question")
     ask.add_argument("--debug", action="store_true", help="Show classifier, scores and latency.")
+    ask.add_argument(
+        "--external-search",
+        action="store_true",
+        help="Answer an out-of-scope question with a web search instead of refusing.",
+    )
     ask.set_defaults(func=cmd_ask)
 
     reindex = commands.add_parser("reindex", help="Re-embed all stored originals.")

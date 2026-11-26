@@ -179,7 +179,11 @@ export async function deleteDocument(docId: string): Promise<DeleteResponse> {
 export async function ask(request: AskRequest, signal?: AbortSignal): Promise<AskResponse> {
   const raw = await send('/ask', {
     method: 'POST',
-    json: { question: request.question, debug: request.debug ?? false },
+    json: {
+      question: request.question,
+      debug: request.debug ?? false,
+      allow_external_search: request.allow_external_search ?? false,
+    },
     timeoutMs: config.askTimeoutMs,
     signal,
   })

@@ -107,9 +107,19 @@ class ApiClient:
         if response.status_code != 200:
             raise ApiError(response.status_code, self._detail(response))
 
-    def ask(self, question: str, debug: bool = False) -> AskResponse:
+    def ask(
+        self, question: str, debug: bool = False, allow_external_search: bool = False
+    ) -> AskResponse:
         """Ask a question. A 502 still carries a fixed-message AskResponse (status `error`)."""
-        response = self._request("POST", "/ask", json={"question": question, "debug": debug})
+        response = self._request(
+            "POST",
+            "/ask",
+            json={
+                "question": question,
+                "debug": debug,
+                "allow_external_search": allow_external_search,
+            },
+        )
         if response.status_code in (200, 502):
             try:
                 return AskResponse(**response.json())

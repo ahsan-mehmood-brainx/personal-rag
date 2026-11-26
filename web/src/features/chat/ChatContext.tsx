@@ -1,5 +1,5 @@
 /**
- * Chat state, app-wide: conversations, the in-flight question, and the chat toggles.
+ * Chat state, app-wide: conversations, the in-flight question, and the external search toggle.
  *
  * Lives above the router so an answer that is still loading is not lost when the user
  * switches to the Documents page and back. One question is in flight at a time, matching the
@@ -16,7 +16,6 @@ import {
   type ReactNode,
 } from 'react'
 import { ApiError, ask } from '../../api/client'
-import { capabilities } from '../../config'
 import { isStorageWritable, newId } from '../../lib/storage'
 import {
   addConversation,
@@ -32,6 +31,8 @@ import type { ChatMessage, Conversation } from './types'
 interface Pending {
   conversationId: string
   question: string
+  /** External search value this question was sent with. */
+  externalSearch: boolean
 }
 
 interface ChatState {
@@ -39,10 +40,9 @@ interface ChatState {
   pending: Pending | null
   /** False when the browser refused to save history (private mode, storage full). */
   persisted: boolean
+  /** Can be changed at any time; each question uses the value it was sent with. */
   externalSearch: boolean
   setExternalSearch: (value: boolean) => void
-  showInternals: boolean
-  setShowInternals: (value: boolean) => void
   /** Ask a question. Creates a conversation when `conversationId` is null. Returns its id. */
   send: (conversationId: string | null, question: string) => string | null
   retry: (conversationId: string, failedMessageId: string) => void
@@ -59,9 +59,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
   const [pending, setPending] = useState<Pending | null>(null)
   const [persisted] = useState(isStorageWritable)
-  // Defaults to OFF, as required; it can only be turned on when the backend supports it.
-  const [externalSearch, setExternalSearchState] = useState(false)
-  const [showInternals, setShowInternals] = useState(false)
+  // Defaults to OFF. Kept app-wide (not per conversation), so it carries over to new chats.
+  const [externalSearch, setExternalSearch] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const pendingRef = useRef<Pending | null>(null)
 
@@ -73,10 +72,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => controller.current?.abort(), [])
 
-  const setExternalSearch = useCallback((value: boolean) => {
-    setExternalSearchState(capabilities.externalSearch ? value : false)
-  }, [])
-
   const push = useCallback((conversationId: string, message: ChatMessage) => {
     setConversations((list) => appendMessage(list, conversationId, message))
   }, [])
@@ -85,12 +80,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (conversationId: string, question: string) => {
       const current = new AbortController()
       controller.current = current
-      const job = { conversationId, question }
+      // Read once, so toggling while this question is in flight affects only the next one.
+      const external = externalSearch
+      const job = { conversationId, question, externalSearch: external }
       pendingRef.current = job
       setPending(job)
-      const external = capabilities.externalSearch && externalSearch
       try {
-        const response = await ask({ question, debug: showInternals }, current.signal)
+        const response = await ask({ question, allow_external_search: external }, current.signal)
         push(conversationId, {
           id: newId(),
           role: 'assistant',
@@ -118,7 +114,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setPending(null)
       }
     },
-    [externalSearch, showInternals, push],
+    [externalSearch, push],
   )
 
   const send = useCallback(
@@ -170,8 +166,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       persisted,
       externalSearch,
       setExternalSearch,
-      showInternals,
-      setShowInternals,
       send,
       retry,
       stop,
@@ -184,7 +178,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       persisted,
       externalSearch,
       setExternalSearch,
-      showInternals,
       send,
       retry,
       stop,

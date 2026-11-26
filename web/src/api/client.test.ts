@@ -34,6 +34,7 @@ const answered = {
   sources: [
     { label: 'S1', filename: 'cv.md', section: 'Education', page: null, similarity: 0.71, excerpt: 'BSc…' },
   ],
+  web_sources: [],
   debug: null,
 }
 
@@ -49,25 +50,49 @@ describe('api client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/documents', expect.objectContaining({ method: 'GET' }))
   })
 
-  it('sends question and debug flag only, as the backend contract defines', async () => {
+  it('sends question, debug and external search flags, defaulting both to false', async () => {
     const fetchMock = mockFetch(jsonResponse(200, answered))
-    await ask({ question: 'Where did I study?', debug: true })
+    await ask({ question: 'Where did I study?' })
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
-    expect(JSON.parse(init.body as string)).toEqual({ question: 'Where did I study?', debug: true })
+    expect(JSON.parse(init.body as string)).toEqual({
+      question: 'Where did I study?',
+      debug: false,
+      allow_external_search: false,
+    })
+  })
+
+  it('sends allow_external_search when the toggle is on', async () => {
+    const fetchMock = mockFetch(jsonResponse(200, answered))
+    await ask({ question: 'What is Kubernetes?', allow_external_search: true })
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(init.body as string)).toMatchObject({ allow_external_search: true })
+  })
+
+  it('accepts a web answer with its web sources', async () => {
+    const body = {
+      status: 'web_answered',
+      answer: 'Kubernetes is a container orchestrator.',
+      sources: [],
+      web_sources: [{ title: 'Kubernetes', url: 'https://kubernetes.io/' }],
+      debug: null,
+    }
+    mockFetch(jsonResponse(200, body))
+    await expect(ask({ question: 'q', allow_external_search: true })).resolves.toEqual(body)
   })
 
   it('returns the AskResponse body of an upstream 502 instead of throwing', async () => {
-    const body = { status: 'error', answer: 'Something went wrong…', sources: [], debug: null }
+    const body = { status: 'error', answer: 'Something went wrong…', sources: [], web_sources: [], debug: null }
     mockFetch(jsonResponse(502, body))
     await expect(ask({ question: 'q' })).resolves.toEqual(body)
   })
 
-  it('fills sources and debug when the backend omits them', async () => {
+  it('fills sources, web sources and debug when the backend omits them', async () => {
     mockFetch(jsonResponse(200, { status: 'meta', answer: 'Hi' }))
     await expect(ask({ question: 'hello' })).resolves.toEqual({
       status: 'meta',
       answer: 'Hi',
       sources: [],
+      web_sources: [],
       debug: null,
     })
   })

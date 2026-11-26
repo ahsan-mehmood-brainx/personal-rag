@@ -5,12 +5,20 @@
  * If the backend changes a model, change it here and in `guards.ts`.
  */
 
-export type AskStatus = 'answered' | 'not_found' | 'out_of_scope' | 'meta' | 'no_documents' | 'error'
+export type AskStatus =
+  | 'answered'
+  | 'not_found'
+  | 'out_of_scope'
+  | 'web_answered'
+  | 'meta'
+  | 'no_documents'
+  | 'error'
 
 export const ASK_STATUSES: readonly AskStatus[] = [
   'answered',
   'not_found',
   'out_of_scope',
+  'web_answered',
   'meta',
   'no_documents',
   'error',
@@ -49,6 +57,8 @@ export interface DeleteResponse {
 export interface AskRequest {
   question: string
   debug?: boolean
+  /** Lets an out-of-scope question be answered by a web search instead of refused. */
+  allow_external_search?: boolean
 }
 
 export interface Source {
@@ -58,6 +68,12 @@ export interface Source {
   page: number | null
   similarity: number
   excerpt: string
+}
+
+/** A web page cited by a `web_answered` answer. */
+export interface WebSource {
+  title: string
+  url: string
 }
 
 export interface TokenUsage {
@@ -88,5 +104,7 @@ export interface AskResponse {
   status: AskStatus
   answer: string
   sources: Source[]
+  /** Present only for `web_answered`. */
+  web_sources: WebSource[]
   debug: DebugInfo | null
 }

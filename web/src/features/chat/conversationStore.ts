@@ -5,7 +5,7 @@
  * history lives only in this browser. Kept pure so the reducer logic is unit-tested without
  * React.
  */
-import { isAskResponse } from '../../api/guards'
+import { isAskResponse, normalizeAskResponse } from '../../api/guards'
 import { readJson, writeJson } from '../../lib/storage'
 import type { ChatMessage, Conversation } from './types'
 
@@ -46,9 +46,15 @@ function isConversationList(v: unknown): v is Conversation[] {
   return Array.isArray(v) && v.every(isConversation)
 }
 
+/** Fill fields older saved answers lack (for example `web_sources`). */
+function normalizeMessage(m: ChatMessage): ChatMessage {
+  return m.role === 'assistant' ? { ...m, response: normalizeAskResponse(m.response) } : m
+}
+
 /** Load saved conversations; anything malformed (old format, hand-edited) is ignored. */
 export function loadConversations(): Conversation[] {
-  return readJson(STORAGE_KEY, isConversationList) ?? []
+  const list = readJson(STORAGE_KEY, isConversationList) ?? []
+  return list.map((c) => ({ ...c, messages: c.messages.map(normalizeMessage) }))
 }
 
 export function saveConversations(list: Conversation[]): boolean {

@@ -8,6 +8,7 @@ the real `data/` index is never opened.
 Test-only routing in the fake classifier (so e2e tests can reach every status):
     "hello" / "what can you do"   -> meta
     starts with "what is", "explain", "search the web", "latest" -> out_of_scope
+    out_of_scope with allow_external_search -> fake web answer citing https://example.com/
     contains "trigger upstream error" -> classifier raises UpstreamError (HTTP 502, status error)
     anything else                 -> personal
 
@@ -32,7 +33,14 @@ from personal_rag.api.main import ApiContext, create_app  # noqa: E402
 from personal_rag.ingestion.service import IngestionService  # noqa: E402
 from personal_rag.llm.client import UpstreamError  # noqa: E402
 from personal_rag.query.pipeline import QueryPipeline  # noqa: E402
-from personal_rag.schemas import GroundedAnswer, LabeledChunk, ScopeDecision, TokenUsage  # noqa: E402
+from personal_rag.schemas import (  # noqa: E402
+    GroundedAnswer,
+    LabeledChunk,
+    ScopeDecision,
+    TokenUsage,
+    WebAnswer,
+    WebSource,
+)
 from personal_rag.store.vector_store import VectorStore  # noqa: E402
 
 # Same defaults as the real app (MAX_UPLOAD_MB=10, MAX_QUESTION_CHARS=1000).
@@ -69,6 +77,15 @@ class ExcerptGenerator:
         return GroundedAnswer(status="answered", answer=answer, citations=[top.label]), FAKE_USAGE
 
 
+class EchoWebSearcher:
+    """Stands in for the real web search: no network, one fixed source."""
+
+    def search(self, question: str) -> tuple[WebAnswer, TokenUsage]:
+        answer = f'From the web: a general answer to "{question.strip()[:80]}".'
+        source = WebSource(title="Example source", url="https://example.com/")
+        return WebAnswer(answer=answer, sources=[source]), FAKE_USAGE
+
+
 def build_context(data_dir: Path) -> ApiContext:
     embedder = FakeEmbedder()
     store = VectorStore(data_dir / "chroma", embedder.model)
@@ -85,6 +102,7 @@ def build_context(data_dir: Path) -> ApiContext:
         embedder=embedder,
         store=store,
         generator=ExcerptGenerator(),
+        web_searcher=EchoWebSearcher(),
         top_k=5,
         similarity_threshold=0.05,
         max_question_chars=MAX_QUESTION_CHARS,

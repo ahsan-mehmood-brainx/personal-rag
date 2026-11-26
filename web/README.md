@@ -72,16 +72,21 @@ Python environment, make no OpenAI calls, and never touch `data/`. The first run
 
 **Chat** (`/chat`, `/chat/:id`)
 - Text input only. There are no attachments, images, voice or audio controls.
-- Every backend status has its own badge: Answered, Not in your documents, Out of scope, Info,
-  No documents, Error. Answers render paragraphs, lists and bold safely (no `innerHTML`), with
+- Every backend status has its own badge: Answered, Not in your documents, Out of scope, From
+  the web, Info, No documents, Error. Answers render paragraphs, lists and bold safely (no `innerHTML`), with
   expandable sources: label, file, section, page, similarity and excerpt.
 - A loading indicator with Stop; failed requests can be retried without retyping.
-- "Show internals" sends `debug: true` and shows the classifier decision, retrieved chunks
-  against the threshold, latency and token use.
 - Conversation history sidebar (a drawer on tablet and phone): new chat, switch, delete,
   clear all.
-- **Allow External Search** toggle, visible under the input and OFF by default. See the next
-  section for why it is locked.
+- **Allow External Search** toggle under the input, OFF by default. It is the only chat
+  toggle and can be turned on or off at any point in a conversation, including after the first
+  question; each question is sent with the value it had at that moment
+  (`allow_external_search` on `POST /ask`). When ON, questions the backend's scope gate classes
+  as out of scope (general knowledge) are answered by a web search, with a "From the web" badge
+  and an expandable list of web sources (only `http`/`https` links are rendered). Questions
+  about you still come only from your documents, and the web search never sees document
+  content. When OFF, out-of-scope questions get the fixed refusal plus an "External search is
+  off" notice.
 
 **General**: light, dark and system themes; a backend health indicator; keyboard and
 screen-reader support (labelled controls, live regions, focus-trapped dialogs, skip link);
@@ -92,27 +97,17 @@ reduced-motion support.
 These parts of the frontend brief have no backend support. Following the brief, the frontend
 does not invent endpoints or fake the behavior.
 
-1. **External search.** `POST /ask` accepts only `question` and `debug`. The backend answers
-   strictly from uploaded documents, and its scope gate is designed to refuse anything that
-   needs outside information (spec section 2.1). The toggle is therefore shown locked OFF with
-   an explanation. When a question is refused as out of scope, the answer carries an "External
-   search is off" notice. The toggle value is **not** sent to `/ask`: Pydantic would silently
-   ignore an unknown field, which would look like it works when it does not.
-   *Needed to enable it:* an `/ask` request field (for example `allow_external_search: bool`),
-   a backend search provider, and a scope policy decision. Then set
-   `capabilities.externalSearch = true` in `src/config.ts` and include the field in `ask()` in
-   `src/api/client.ts`.
-2. **Server-side conversation history.** The backend is stateless and stores no chats, so
+1. **Server-side conversation history.** The backend is stateless and stores no chats, so
    history is kept in this browser's `localStorage` (key `prag.conversations.v1`, at most 50
    conversations). It does not follow you to another browser, and "Clear history" removes it.
    Each question is still answered on its own; earlier turns are not sent as context.
-3. **Asynchronous processing status.** `POST /documents` is synchronous: it returns once
+2. **Asynchronous processing status.** `POST /documents` is synchronous: it returns once
    parsing, chunking and embedding finish. Every listed document is therefore "Indexed"; the
    upload queue shows "Uploading and indexing…" while a file is processed. A real progress
    percentage would need a job or status endpoint.
-4. **Legacy `.doc` files** are not accepted by the backend (`ALLOWED_EXTENSIONS`). The UI
+3. **Legacy `.doc` files** are not accepted by the backend (`ALLOWED_EXTENSIONS`). The UI
    explains this instead of uploading them.
-5. **Authentication.** The backend has none (single-user, localhost-only), so the frontend has
+4. **Authentication.** The backend has none (single-user, localhost-only), so the frontend has
    none either. Add both together if the app is ever exposed beyond `127.0.0.1`.
 
 ## Structure

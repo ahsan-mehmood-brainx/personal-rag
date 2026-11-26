@@ -78,9 +78,17 @@ describe('conversation store', () => {
       role: 'assistant',
       createdAt: at(1),
       externalSearch: false,
-      response: { status: 'meta', answer: 'Hi', sources: [], debug: null },
+      response: { status: 'meta', answer: 'Hi', sources: [], web_sources: [], debug: null },
     })
     saveConversations([conversation])
+    expect(loadConversations()).toEqual([conversation])
+
+    // Answers saved before web search existed have no `web_sources`; they still load.
+    const legacy = JSON.parse(JSON.stringify([conversation])) as Array<{
+      messages: Array<{ response: Record<string, unknown> }>
+    }>
+    delete legacy[0]?.messages[0]?.response.web_sources
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy))
     expect(loadConversations()).toEqual([conversation])
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([{ id: 'x', messages: 'nope' }]))

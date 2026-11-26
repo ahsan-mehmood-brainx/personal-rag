@@ -1,5 +1,5 @@
 /**
- * Chat page: conversation history, message thread, composer and chat toggles.
+ * Chat page: conversation history, message thread, composer and the external search toggle.
  * Each question goes to `POST /ask`; history is kept in this browser (the backend is stateless).
  */
 import { useEffect, useRef, useState } from 'react'
@@ -8,8 +8,6 @@ import { ROUTES } from '../../app/routes'
 import { Button } from '../../components/Button'
 import { Callout } from '../../components/Callout'
 import { Icon } from '../../components/Icon'
-import { Switch } from '../../components/Switch'
-import { capabilities } from '../../config'
 import { useHealth } from '../health/HealthContext'
 import { useChat } from './ChatContext'
 import { Composer } from './Composer'
@@ -163,13 +161,6 @@ export function ChatPage() {
           />
           <h2 className={styles.chatTitle}>{active?.title ?? 'New chat'}</h2>
           <div className={styles.headerTools}>
-            <Switch
-              checked={chat.showInternals}
-              onChange={chat.setShowInternals}
-              label="Show internals"
-              testId="internals-toggle"
-              compact
-            />
             <Button
               variant="ghost"
               size="sm"
@@ -196,7 +187,9 @@ export function ChatPage() {
                 />
               ))
             )}
-            {pendingHere && <PendingMessage onStop={chat.stop} />}
+            {pendingHere && (
+              <PendingMessage onStop={chat.stop} externalSearch={chat.pending?.externalSearch ?? false} />
+            )}
             <div ref={endRef} />
           </div>
         </div>
@@ -222,11 +215,7 @@ export function ChatPage() {
               busy={busy}
               autoFocus
               toolbar={
-                <ExternalSearchToggle
-                  checked={chat.externalSearch}
-                  available={capabilities.externalSearch}
-                  onChange={chat.setExternalSearch}
-                />
+                <ExternalSearchToggle checked={chat.externalSearch} onChange={chat.setExternalSearch} />
               }
             />
           </div>

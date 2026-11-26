@@ -65,7 +65,11 @@ class IngestResult(BaseModel):
 
 # --- Query pipeline ---------------------------------------------------------------------
 
-Status = Literal["answered", "not_found", "out_of_scope", "meta", "no_documents", "error"]
+# `web_answered` is returned only when the caller allowed external search and the scope gate
+# classified the question as out of scope; the answer then comes from a web search.
+Status = Literal[
+    "answered", "not_found", "out_of_scope", "web_answered", "meta", "no_documents", "error"
+]
 
 
 class TokenUsage(BaseModel):
@@ -125,6 +129,20 @@ class Source(BaseModel):
     excerpt: str  # first ~300 characters of the chunk
 
 
+class WebSource(BaseModel):
+    """A web page a `web_answered` answer cited."""
+
+    title: str
+    url: str
+
+
+class WebAnswer(BaseModel):
+    """Output of the external web search step."""
+
+    answer: str
+    sources: list[WebSource] = Field(default_factory=list)
+
+
 class DebugChunk(BaseModel):
     """A retrieved chunk as shown in the debug view, kept or not."""
 
@@ -149,4 +167,5 @@ class AskResponse(BaseModel):
     status: Status
     answer: str
     sources: list[Source] = Field(default_factory=list)  # only chunks the answer cited
+    web_sources: list[WebSource] = Field(default_factory=list)  # only for `web_answered`
     debug: DebugInfo | None = None

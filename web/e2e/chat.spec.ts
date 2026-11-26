@@ -43,13 +43,49 @@ test('answers from uploaded documents with a status badge and sources', async ({
   await expect(page.getByLabel('Your question')).toHaveValue('')
 })
 
-test('external search toggle is visible, OFF by default, and locked with an explanation', async ({ page }) => {
+test('external search is the only toggle, OFF by default and enabled', async ({ page }) => {
   await page.goto('/chat')
+  await expect(page.getByRole('switch')).toHaveCount(1)
   const toggle = page.getByRole('switch', { name: 'Allow External Search' })
   await expect(toggle).toBeVisible()
   await expect(toggle).toHaveAttribute('aria-checked', 'false')
-  await expect(toggle).toBeDisabled()
-  await expect(page.getByText("External search isn't supported by this backend yet.")).toBeVisible()
+  await expect(toggle).toBeEnabled()
+  await expect(page.getByText('Answers come only from your uploaded documents.')).toBeVisible()
+})
+
+test('external search can be turned on and off during a conversation', async ({ page, request }) => {
+  await seedDocument(request, 'cv.md')
+  await page.goto('/chat')
+  const toggle = page.getByRole('switch', { name: 'Allow External Search' })
+
+  // First question with the toggle OFF: refused, with the notice.
+  await askQuestion(page, 'What is Kubernetes?')
+  await expect(lastAssistant(page).getByText('Out of scope')).toBeVisible()
+  await expect(lastAssistant(page).getByTestId('external-search-notice')).toBeVisible()
+
+  // Turn it ON after the first chat: the same kind of question is answered from the web.
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  const sentOn = page.waitForRequest((r) => isAsk(new URL(r.url())))
+  await askQuestion(page, 'What is Docker?')
+  expect((await sentOn).postDataJSON()).toMatchObject({ allow_external_search: true })
+  const web = lastAssistant(page)
+  await expect(web.getByText('From the web', { exact: true })).toBeVisible()
+  await expect(web).toContainText('From the web: a general answer')
+  await web.getByText('Web sources (1)').click()
+  await expect(web.getByRole('link', { name: 'Example source' })).toHaveAttribute('href', 'https://example.com/')
+  await expect(web.getByTestId('external-search-notice')).toHaveCount(0)
+
+  // Personal questions still come from the documents with the toggle ON.
+  await askQuestion(page, 'Where did I study?')
+  await expect(lastAssistant(page).getByText('Answered')).toBeVisible()
+
+  // Turn it OFF again: back to the refusal. All of this stays in one conversation.
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await askQuestion(page, 'What is Python?')
+  await expect(lastAssistant(page).getByText('Out of scope')).toBeVisible()
+  await expect(page.getByRole('article', { name: 'You' })).toHaveCount(4)
 })
 
 test('out-of-scope questions explain that external search is off', async ({ page, request }) => {
@@ -120,20 +156,14 @@ test('shows a loading indicator and can stop a slow request', async ({ page, req
   await expect(pending).toHaveCount(0)
 })
 
-test('show internals sends debug and renders classifier and retrieval details', async ({ page, request }) => {
+test('sends the external search flag and no debug request by default', async ({ page, request }) => {
   await seedDocument(request, 'cv.md')
   await page.goto('/chat')
   const requestPromise = page.waitForRequest((r) => isAsk(new URL(r.url())))
-  await page.getByRole('switch', { name: 'Show internals' }).click()
   await askQuestion(page, 'Where did I study?')
   const sent = (await requestPromise).postDataJSON() as Record<string, unknown>
-  expect(sent).toEqual({ question: 'Where did I study?', debug: true })
-
-  const answer = lastAssistant(page)
-  await answer.getByText('Internals').click()
-  await expect(answer.getByText('Classifier')).toBeVisible()
-  await expect(answer.locator('code')).toHaveText('personal')
-  await expect(answer.getByRole('table')).toContainText('kept')
+  expect(sent).toEqual({ question: 'Where did I study?', debug: false, allow_external_search: false })
+  await expect(lastAssistant(page).getByText('Internals')).toHaveCount(0)
 })
 
 test('enforces the question length limit before sending', async ({ page }) => {
